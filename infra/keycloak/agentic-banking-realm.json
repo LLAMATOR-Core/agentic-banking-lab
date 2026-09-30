@@ -1,0 +1,268 @@
+{
+  "realm": "agentic-banking",
+  "displayName": "Agentic Banking Lab",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "roles": {
+    "realm": [
+      {"name": "bank_user", "description": "Retail banking customer"},
+      {"name": "researcher", "description": "Stand observer"}
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bank-ui",
+      "name": "Internet Bank UI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "customer-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "customer_id",
+            "claim.name": "customer_id",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-banking-agent",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "banking-agent", "access.token.claim": "true"}
+        },
+        {
+          "name": "audience-abs-mcp",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "abs-mcp", "access.token.claim": "true"}
+        },
+        {
+          "name": "audience-bank-mcp-token-exchange",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "bank-mcp", "access.token.claim": "true"}
+        },
+        {
+          "name": "audience-abs-mcp-vulnerable",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "abs-mcp-vulnerable", "access.token.claim": "true"}
+        }
+      ]
+    },
+    {
+      "clientId": "banking-agent",
+      "name": "Banking Agent service",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${KEYCLOAK_BANKING_AGENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-memory",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "memory-orchestrator", "access.token.claim": "true"}
+        },
+        {
+          "name": "audience-travel-agent",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "travel-agent", "access.token.claim": "true"}
+        },
+        {
+          "name": "audience-duckduckgo-mcp",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"}
+        }
+      ]
+    },
+    {
+      "clientId": "bank-mcp",
+      "name": "ABS MCP service",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${KEYCLOAK_BANK_MCP_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "attributes": {"standard.token.exchange.enabled": "true"},
+      "protocolMappers": [
+        {
+          "name": "audience-abs-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "abs-api", "access.token.claim": "true"}
+        },
+        {
+          "name": "customer-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "customer_id",
+            "claim.name": "customer_id",
+            "jsonType.label": "String",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "bank-mcp-vulnerable",
+      "name": "Intentionally vulnerable ABS MCP service identity",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${KEYCLOAK_BANK_MCP_VULNERABLE_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-abs-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "abs-api", "access.token.claim": "true"}
+        }
+      ]
+    },
+    {
+      "clientId": "travel-agent",
+      "name": "Partner travel agent",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${KEYCLOAK_TRAVEL_AGENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-booking",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "booking-mcp", "access.token.claim": "true"}
+        },
+        {
+          "name": "audience-expedia",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "expedia-mcp", "access.token.claim": "true"}
+        },
+        {
+          "name": "audience-travel-data",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "travel-data-mcp", "access.token.claim": "true"}
+        }
+      ]
+    },
+    {"clientId": "abs-api", "enabled": true, "bearerOnly": true},
+    {"clientId": "abs-mcp", "enabled": true, "bearerOnly": true},
+    {"clientId": "memory-orchestrator", "enabled": true, "bearerOnly": true},
+    {"clientId": "booking-mcp", "enabled": true, "bearerOnly": true},
+    {"clientId": "expedia-mcp", "enabled": true, "bearerOnly": true},
+    {"clientId": "duckduckgo-mcp", "enabled": true, "bearerOnly": true},
+    {"clientId": "travel-data-mcp", "enabled": true, "bearerOnly": true}
+  ],
+  "users": [
+    {
+      "username": "ivan.petrov",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Иван",
+      "lastName": "Петров",
+      "email": "ivan.petrov@example.test",
+      "attributes": {"customer_id": ["customer-001"]},
+      "credentials": [
+        {"type": "password", "value": "banking-demo", "temporary": false}
+      ],
+      "realmRoles": ["bank_user"]
+    },
+    {
+      "username": "researcher",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Security",
+      "lastName": "Researcher",
+      "email": "researcher@example.test",
+      "attributes": {"customer_id": ["customer-002"]},
+      "credentials": [
+        {"type": "password", "value": "research-demo", "temporary": false}
+      ],
+      "realmRoles": ["bank_user", "researcher"]
+    },
+    {
+      "username": "anna.sokolova",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Анна",
+      "lastName": "Соколова",
+      "email": "anna.sokolova@example.test",
+      "attributes": {"customer_id": ["customer-002"]},
+      "credentials": [
+        {"type": "password", "value": "banking-demo", "temporary": false}
+      ],
+      "realmRoles": ["bank_user"]
+    },
+    {
+      "username": "mikhail.orlov",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Михаил",
+      "lastName": "Орлов",
+      "email": "mikhail.orlov@example.test",
+      "attributes": {"customer_id": ["customer-003"]},
+      "credentials": [
+        {"type": "password", "value": "banking-demo", "temporary": false}
+      ],
+      "realmRoles": ["bank_user"]
+    },
+    {
+      "username": "elena.smirnova",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Елена",
+      "lastName": "Смирнова",
+      "email": "elena.smirnova@example.test",
+      "attributes": {"customer_id": ["customer-004"]},
+      "credentials": [
+        {"type": "password", "value": "banking-demo", "temporary": false}
+      ],
+      "realmRoles": ["bank_user"]
+    }
+  ]
+}

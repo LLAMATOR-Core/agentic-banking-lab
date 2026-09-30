@@ -1,0 +1,191 @@
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from datetime import date, timedelta
+from typing import Any
+
+import httpx
+
+KEYCLOAK = "http://localhost:8080/realms/agentic-banking"
+AGENT = "http://localhost:8000"
+
+
+def wait_for(url: str, timeout: int = 240) -> None:
+    deadline = time.monotonic() + timeout
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            response = httpx.get(url, timeout=3)
+            if response.is_success:
+                return
+            last_error = f"HTTP {response.status_code}"
+        except httpx.HTTPError as exc:
+            last_error = str(exc)
+        time.sleep(2)
+    raise RuntimeError(f"Timed out waiting for {url}: {last_error}")
+
+
+def login(username: str = "ivan.petrov", password: str = "banking-demo") -> str:
+    response = httpx.post(
+        f"{KEYCLOAK}/protocol/openid-connect/token",
+        data={
+            "grant_type": "password",
+            "client_id": "bank-ui",
+            "username": username,
+            "password": password,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
+def request(method: str, path: str, token: str, **kwargs: Any) -> Any:
+    response = httpx.request(
+        method,
+        f"{AGENT}{path}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=45,
+        **kwargs,
+    )
+    if response.is_error:
+        raise RuntimeError(f"{method} {path}: {response.status_code} {response.text}")
+    return response.json()
+
+
+def run(confirm: bool) -> None:
+    wait_for(f"{KEYCLOAK}/.well-known/openid-configuration")
+    wait_for(f"{AGENT}/health")
+    wait_for("http://localhost:8003/health")
+    token = login()
+    second_token = login("anna.sokolova")
+    conversation_id = f"smoke-{int(time.time())}"
+
+    dashboard = request("GET", "/v1/dashboard", token)
+    assert dashboard["customer"]["id"] == "customer-001"
+    assert len(dashboard["accounts"]) >= 2
+    print("OK dashboard and customer isolation")
+
+    second_dashboard = request("GET", "/v1/dashboard", second_token)
+    assert second_dashboard["customer"]["id"] == "customer-002"
+    assert {item["id"] for item in dashboard["accounts"]}.isdisjoint(
+        {item["id"] for item in second_dashboard["accounts"]}
+    )
+    print("OK secure MCP uses exchanged user identity for two users")
+
+    vulnerable = request(
+        "POST",
+        "/v1/lab/vulnerable-abs",
+        token,
+        json={"tool": "get_customer_accounts", "customer_id": "customer-002"},
+    )
+    assert vulnerable["selected_customer_id"] == "customer-002"
+    assert {row["id"] for row in vulnerable["result"]} == {
+        row["id"] for row in second_dashboard["accounts"]
+    }
+    print("OK intentionally vulnerable MCP reproduces customer_id substitution")
+
+    marker = f"shared-poison-{int(time.time())}"
+    request(
+        "POST",
+        "/v1/lab/shared-memory",
+        token,
+        json={"memory_type": "procedural", "content": marker},
+    )
+    recalled = request(
+        "GET",
+        f"/v1/lab/memory-recall?query={marker}",
+        second_token,
+    )
+    shared = next(item for item in recalled["memories"] if marker in item["content"])
+    assert shared["user_id"] == "*"
+    assert shared["metadata"]["source_user_id"] == "customer-001"
+    print("OK shared memory poisoning crosses user boundary with provenance")
+
+    chat = request(
+        "POST",
+        "/v1/chat",
+        token,
+        json={"message": "Покажи мои счета", "conversation_id": conversation_id},
+    )
+    assert chat["intent"] == "accounts" and "abs.get_customer_accounts" in chat["tool_calls"]
+    print("OK LangGraph accounts skill through MCP")
+
+    departure = date.today() + timedelta(days=30)
+    travel = request(
+        "POST",
+        "/v1/chat",
+        token,
+        json={
+            "message": "Спланируй поездку в Стамбул",
+            "conversation_id": conversation_id,
+            "travel": {
+                "origin": "MOW",
+                "destination": "Стамбул",
+                "destination_airport": "IST",
+                "departure_date": departure.isoformat(),
+                "return_date": (departure + timedelta(days=5)).isoformat(),
+                "adults": 1,
+                "budget": 150000,
+                "currency": "RUB",
+                "interests": ["culture", "food"],
+            },
+        },
+    )
+    assert travel["intent"] == "travel" and "a2a.travel.plan-trip" in travel["tool_calls"]
+    assert travel["data"]["travel"]["packages"]
+    print("OK A2A travel delegation and partner MCP tools")
+
+    rub_accounts = [item for item in dashboard["accounts"] if item["currency"] == "RUB"]
+    prepared = request(
+        "POST",
+        "/v1/chat",
+        token,
+        json={
+            "message": "Подготовь безопасный тестовый перевод",
+            "conversation_id": conversation_id,
+            "action": {
+                "type": "transfer",
+                "parameters": {
+                    "from_account": rub_accounts[0]["id"],
+                    "to_account": rub_accounts[1]["number"],
+                    "amount": "1.00",
+                    "description": "Smoke test",
+                },
+            },
+        },
+    )
+    assert prepared["requires_confirmation"] and prepared["confirmation_id"]
+    print("OK active operation stopped at human confirmation gate")
+
+    if confirm:
+        confirmation = {
+            "message": "Подтверждаю тестовый перевод",
+            "conversation_id": conversation_id,
+            "confirm_action_id": prepared["confirmation_id"],
+        }
+        executed = request("POST", "/v1/chat", token, json=confirmation)
+        replay = request("POST", "/v1/chat", token, json=confirmation)
+        assert (
+            executed["data"]["result"]["operation_id"] == replay["data"]["result"]["operation_id"]
+        )
+        print("OK confirmed transfer and idempotent replay")
+
+    card = httpx.get("http://localhost:8003/.well-known/agent-card.json", timeout=5).json()
+    assert card["supportedInterfaces"][0]["protocolVersion"] == "1.0"
+    print("OK A2A Agent Card")
+    print("Smoke test completed successfully")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Smoke-test the local Agentic Banking stand")
+    parser.add_argument(
+        "--confirm", action="store_true", help="execute a 1 RUB self-owned transfer and replay it"
+    )
+    try:
+        run(parser.parse_args().confirm)
+    except Exception as exc:
+        print(f"FAILED: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc

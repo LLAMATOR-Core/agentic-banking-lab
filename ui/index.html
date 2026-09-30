@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>Интернет-банк</title>
+    <link rel="stylesheet" href="/styles.css?v=2" />
+  </head>
+  <body>
+    <div id="login-view" class="login-view">
+      <div class="login-card">
+        <div class="brand-mark" aria-label="Интернет-банк">₽</div>
+        <p class="eyebrow">ИНТЕРНЕТ-БАНК</p>
+        <h1>Добро пожаловать</h1>
+        <p class="muted">Войдите, чтобы управлять счетами, инвестициями и другими продуктами банка.</p>
+        <button id="login-button" class="primary-button">Войти</button>
+        <p class="secure-note"><span class="lock-icon">✓</span> Защищённый вход</p>
+      </div>
+    </div>
+
+    <div id="app-view" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark small">₽</span><span>Интернет-банк</span></div>
+        <nav>
+          <button class="nav-item active">Обзор</button>
+          <button class="nav-item" data-prompt="Покажи мои счета и остатки">Счета</button>
+          <button class="nav-item" data-prompt="Покажи последние операции">Операции</button>
+          <button class="nav-item" data-prompt="Покажи мой инвестиционный портфель и свежие новости">Инвестиции</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span class="status-dot"></span> Защищённое соединение
+          <button id="logout-button" class="text-button">Выйти</button>
+        </div>
+      </aside>
+
+      <main class="dashboard">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">ИНТЕРНЕТ-БАНК</p>
+            <h2 id="greeting">Добрый день</h2>
+          </div>
+          <div class="user-pill"><span id="user-initials">ИП</span><div><strong id="user-name">…</strong><small id="user-tier">…</small></div></div>
+        </header>
+
+        <section class="hero-grid">
+          <article class="balance-card">
+            <div class="card-heading"><span>Всего на счетах в RUB</span><span class="live-badge">ОБНОВЛЕНО</span></div>
+            <div id="total-balance" class="total-balance">—</div>
+            <div id="account-cards" class="mini-accounts"></div>
+          </article>
+          <article class="portfolio-card">
+            <p class="card-label">Инвестиционный портфель</p>
+            <div id="portfolio-total" class="portfolio-total">—</div>
+            <p class="muted">Актуальная стоимость активов</p>
+            <button class="outline-button" data-prompt="Покажи мой портфель и инвестиционные новости">Подробнее</button>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel operations-panel">
+            <div class="panel-title"><div><p class="eyebrow">АКТИВНОСТЬ</p><h3>Последние операции</h3></div><button class="text-button" data-prompt="Покажи последние 10 операций">Все операции</button></div>
+            <div id="operations-list" class="operations-list"><div class="skeleton"></div><div class="skeleton"></div></div>
+          </article>
+
+          <article class="panel actions-panel">
+            <p class="eyebrow">БЫСТРЫЕ ДЕЙСТВИЯ</p>
+            <h3>Чем помочь?</h3>
+            <div class="action-list">
+              <button data-prompt="Покажи мои счета и реквизиты"><span>Счета и реквизиты</span><b>→</b></button>
+              <button data-prompt="Покажи мой инвестиционный портфель"><span>Мои инвестиции</span><b>→</b></button>
+              <button data-prompt="Помоги спланировать поездку"><span>Спланировать поездку</span><b>→</b></button>
+            </div>
+          </article>
+        </section>
+      </main>
+
+      <aside class="agent-panel">
+        <header class="agent-header">
+          <div class="agent-avatar" aria-hidden="true">•</div>
+          <div><strong>Финансовый ассистент</strong><small><span class="status-dot"></span> Онлайн</small></div>
+        </header>
+        <div id="messages" class="messages" aria-live="polite">
+          <div class="message agent">Здравствуйте! Помогу со счетами, операциями, инвестициями и планированием поездки.</div>
+        </div>
+        <div id="confirmation-box" class="confirmation-box hidden">
+          <strong>Требуется подтверждение</strong>
+          <p>Проверьте сумму и реквизиты перед выполнением операции.</p>
+          <button id="confirm-button" class="danger-button">Подтвердить операцию</button>
+        </div>
+        <details class="agent-form">
+          <summary>Перевести деньги <span>+</span></summary>
+          <select id="transfer-from" aria-label="Счёт списания"></select>
+          <input id="transfer-to" placeholder="Счёт получателя" value="RU20000000000000000001" />
+          <input id="transfer-amount" type="number" min="0.01" step="0.01" placeholder="Сумма, RUB" />
+          <button id="prepare-transfer" class="outline-button">Продолжить</button>
+        </details>
+        <details class="agent-form">
+          <summary>Спланировать поездку <span>+</span></summary>
+          <div class="inline-fields"><input id="travel-city" value="Стамбул" aria-label="Город" /><input id="travel-airport" value="IST" maxlength="3" aria-label="Аэропорт" /></div>
+          <div class="inline-fields"><input id="travel-from" type="date" aria-label="Туда" /><input id="travel-to" type="date" aria-label="Обратно" /></div>
+          <input id="travel-budget" type="number" value="150000" min="1" aria-label="Бюджет" />
+          <button id="plan-travel" class="outline-button">Найти варианты</button>
+        </details>
+        <div class="quick-prompts">
+          <button data-prompt="Какой у меня баланс?">Баланс</button>
+          <button data-prompt="Покажи свежие инвестиционные новости">Новости</button>
+          <button data-prompt="Что ты умеешь?">Возможности</button>
+        </div>
+        <form id="chat-form" class="chat-form">
+          <textarea id="chat-input" rows="1" maxlength="4000" placeholder="Напишите сообщение…"></textarea>
+          <button aria-label="Отправить">↑</button>
+        </form>
+        <p class="agent-disclaimer">Проверяйте важную информацию. Операции выполняются только после подтверждения.</p>
+      </aside>
+    </div>
+    <script src="/app.js?v=2" defer></script>
+  </body>
+</html>
