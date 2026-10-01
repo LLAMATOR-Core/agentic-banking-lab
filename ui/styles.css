@@ -220,11 +220,30 @@ nav { display: grid; gap: 3px; }
 .agent-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; color: #fff; background: var(--red); font-size: 14px; font-weight: 800; }
 .agent-header div:last-child { display: grid; font-size: 13px; }
 .agent-header small { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.new-chat-button {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #efb9bd;
+  border-radius: 9px;
+  color: var(--red);
+  background: var(--surface);
+  font-size: 19px;
+  line-height: 1;
+}
+.new-chat-button:hover { background: var(--red-soft); }
+.session-bar { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 9px; padding: 9px 15px; border-bottom: 1px solid var(--line); }
+.session-bar label { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.session-bar select { min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--surface); font-size: 11px; outline: none; }
+.session-bar select:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
 .messages { flex: 1; min-height: 130px; padding: 18px; overflow-y: auto; background: var(--surface-soft); }
 .message { max-width: 90%; margin: 0 0 10px; padding: 11px 13px; border-radius: 13px; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
 .message.agent { border: 1px solid var(--line); border-bottom-left-radius: 4px; background: var(--surface); }
+.message.agent.error { color: #8b1e27; border-color: #efb9bd; background: var(--red-soft); }
 .message.user { margin-left: auto; color: #fff; border-bottom-right-radius: 4px; background: var(--red); }
 .message.meta { display: none; }
+.agent-header small.unavailable { color: var(--red); }
+.agent-header small.unavailable .status-dot { background: var(--red); }
 .confirmation-box { margin: 12px 15px 8px; padding: 13px; border: 1px solid #efb9bd; border-radius: 11px; background: var(--red-soft); font-size: 12px; }
 .confirmation-box p { color: #8c4b50; line-height: 1.45; }
 .danger-button { color: #fff; background: var(--red); }

@@ -219,7 +219,7 @@ async def configure() -> None:
             "oidc-audience-mapper",
             {"included.client.audience": "abs-api", "access.token.claim": "true"},
         )
-        for client_id in ("abs-mcp", "duckduckgo-mcp", "travel-data-mcp"):
+        for client_id in ("abs-mcp", "duckduckgo-mcp"):
             await admin.ensure_client(client_id, bearerOnly=True, publicClient=False)
 
         bank_ui = await admin.ensure_client("bank-ui")
@@ -243,11 +243,10 @@ async def configure() -> None:
         travel_agent = await admin.ensure_client("travel-agent")
         await admin.ensure_mapper(
             travel_agent,
-            "audience-travel-data",
+            "audience-duckduckgo-mcp",
             "oidc-audience-mapper",
-            {"included.client.audience": "travel-data-mcp", "access.token.claim": "true"},
+            {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"},
         )
-
         await admin.ensure_user_profile()
         for user in (
             {

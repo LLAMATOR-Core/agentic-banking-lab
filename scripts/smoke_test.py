@@ -47,7 +47,7 @@ def request(method: str, path: str, token: str, **kwargs: Any) -> Any:
         method,
         f"{AGENT}{path}",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=45,
+        timeout=180,
         **kwargs,
     )
     if response.is_error:
@@ -55,7 +55,7 @@ def request(method: str, path: str, token: str, **kwargs: Any) -> Any:
     return response.json()
 
 
-def run(confirm: bool) -> None:
+def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
     wait_for(f"{KEYCLOAK}/.well-known/openid-configuration")
     wait_for(f"{AGENT}/health")
     wait_for("http://localhost:8003/health")
@@ -67,6 +67,21 @@ def run(confirm: bool) -> None:
     assert dashboard["customer"]["id"] == "customer-001"
     assert len(dashboard["accounts"]) >= 2
     print("OK dashboard and customer isolation")
+
+    if expect_llm_unavailable:
+        response = httpx.post(
+            f"{AGENT}/v1/chat",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "message": "Покажи мои счета",
+                "conversation_id": conversation_id,
+            },
+            timeout=15,
+        )
+        assert response.status_code == 503, response.text
+        assert response.json()["code"] == "llm_unavailable"
+        print("OK unavailable LLM is returned to the UI as explicit HTTP 503")
+        return
 
     second_dashboard = request("GET", "/v1/dashboard", second_token)
     assert second_dashboard["customer"]["id"] == "customer-002"
@@ -113,6 +128,16 @@ def run(confirm: bool) -> None:
     assert chat["intent"] == "accounts" and "abs.get_customer_accounts" in chat["tool_calls"]
     print("OK LangGraph accounts skill through MCP")
 
+    conversations = request("GET", "/v1/conversations", token)["conversations"]
+    assert any(item["conversation_id"] == conversation_id for item in conversations)
+    history = request(
+        "GET", f"/v1/conversations/{conversation_id}/messages", token
+    )["messages"]
+    assert [item["role"] for item in history[-2:]] == ["user", "assistant"]
+    assert history[-2]["content"] == "Покажи мои счета"
+    assert history[-1]["content"] == chat["message"]
+    print("OK full working-memory turn and conversation history")
+
     departure = date.today() + timedelta(days=30)
     travel = request(
         "POST",
@@ -135,8 +160,11 @@ def run(confirm: bool) -> None:
         },
     )
     assert travel["intent"] == "travel" and "a2a.travel.plan-trip" in travel["tool_calls"]
-    assert travel["data"]["travel"]["packages"]
-    print("OK A2A travel delegation and partner MCP tools")
+    travel_result = travel["data"]["travel"]
+    assert travel_result["booking"]["mode"] == "mock-local"
+    assert travel_result["booking"]["external_side_effect"] is False
+    assert "packages" not in travel_result
+    print("OK A2A informational travel search and local mock-booking boundary")
 
     rub_accounts = [item for item in dashboard["accounts"] if item["currency"] == "RUB"]
     prepared = request(
@@ -184,8 +212,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--confirm", action="store_true", help="execute a 1 RUB self-owned transfer and replay it"
     )
+    parser.add_argument(
+        "--expect-llm-unavailable",
+        action="store_true",
+        help="assert that chat fails explicitly when required LLM settings are absent",
+    )
     try:
-        run(parser.parse_args().confirm)
+        args = parser.parse_args()
+        run(args.confirm, args.expect_llm_unavailable)
     except Exception as exc:
         print(f"FAILED: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

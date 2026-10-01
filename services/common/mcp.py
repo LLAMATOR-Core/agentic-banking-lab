@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
+import json
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -84,6 +86,8 @@ def create_mcp_app(server_name: str, tools: list[MCPTool]) -> FastAPI:
             "mcp.tool.call",
             input={"tool": name, "arguments": _redact(arguments)},
             metadata={"server": server_name, "caller": principal.authorized_party},
+            user_id=principal.customer_id,
+            agent_id=server_name,
         ) as span:
             try:
                 result = tool.handler(arguments, principal)
@@ -126,39 +130,118 @@ def _redact(value: dict[str, Any]) -> dict[str, Any]:
 
 
 class MCPClient:
-    def __init__(self, endpoint: str, timeout: float = 15) -> None:
+    def __init__(
+        self, endpoint: str, timeout: float = 15, headers: dict[str, str] | None = None
+    ) -> None:
         self.endpoint = endpoint
         self.timeout = timeout
+        self.headers = headers or {}
+        self.session_id: str | None = None
+        self.initialized = False
+        self._init_lock = asyncio.Lock()
 
-    async def list_tools(self, bearer_token: str) -> list[dict[str, Any]]:
+    async def list_tools(self, bearer_token: str | None = None) -> list[dict[str, Any]]:
+        await self._initialize(bearer_token)
         result = await self._request("tools/list", {}, bearer_token)
         return result["tools"]
 
-    async def call(self, name: str, arguments: dict[str, Any], bearer_token: str) -> Any:
+    async def call(
+        self, name: str, arguments: dict[str, Any], bearer_token: str | None = None
+    ) -> Any:
+        await self._initialize(bearer_token)
         result = await self._request(
             "tools/call", {"name": name, "arguments": arguments}, bearer_token
         )
         if result.get("isError"):
             text = (result.get("content") or [{}])[0].get("text", "MCP tool failed")
             raise ValueError(text)
-        return result.get("structuredContent")
+        structured = result.get("structuredContent")
+        if structured is not None:
+            return structured
+        text = (result.get("content") or [{}])[0].get("text")
+        if not isinstance(text, str):
+            return text
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return {"text": text}
 
     async def _request(
-        self, method: str, params: dict[str, Any], bearer_token: str
+        self, method: str, params: dict[str, Any], bearer_token: str | None
     ) -> dict[str, Any]:
         payload = {"jsonrpc": "2.0", "id": str(uuid.uuid4()), "method": method, "params": params}
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                self.endpoint,
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {bearer_token}",
-                    "Accept": "application/json, text/event-stream",
-                    "MCP-Protocol-Version": "2025-06-18",
-                },
-            )
-            response.raise_for_status()
-        body = response.json()
+        response = await self._post(payload, bearer_token)
+        response.raise_for_status()
+        body = self._decode_response(response)
         if "error" in body:
             raise ValueError(body["error"].get("message", "MCP request failed"))
         return body["result"]
+
+    async def _initialize(self, bearer_token: str | None) -> None:
+        if self.initialized:
+            return
+        async with self._init_lock:
+            if self.initialized:
+                return
+            payload = {
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "agentic-banking", "version": "0.1.0"},
+                },
+            }
+            response = await self._post(payload, bearer_token)
+            response.raise_for_status()
+            body = self._decode_response(response)
+            if "error" in body:
+                raise ValueError(body["error"].get("message", "MCP initialize failed"))
+            self.session_id = response.headers.get("mcp-session-id")
+            notification = {
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            }
+            notified = await self._post(notification, bearer_token)
+            notified.raise_for_status()
+            self.initialized = True
+
+    async def _post(
+        self, payload: dict[str, Any], bearer_token: str | None
+    ) -> httpx.Response:
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "MCP-Protocol-Version": "2025-06-18",
+            **self.headers,
+        }
+        if bearer_token:
+            headers["Authorization"] = f"Bearer {bearer_token}"
+        if self.session_id:
+            headers["Mcp-Session-Id"] = self.session_id
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await client.post(
+                self.endpoint,
+                json=payload,
+                headers=headers,
+            )
+
+    @staticmethod
+    def _decode_response(response: httpx.Response) -> dict[str, Any]:
+        if "text/event-stream" not in response.headers.get("content-type", ""):
+            return response.json()
+        events = [
+            line.removeprefix("data:").strip()
+            for line in response.text.splitlines()
+            if line.startswith("data:")
+        ]
+        for event in reversed(events):
+            try:
+                decoded = json.loads(event)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(decoded, dict):
+                return decoded
+        raise ValueError("MCP server returned an invalid event stream")

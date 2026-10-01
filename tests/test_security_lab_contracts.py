@@ -27,7 +27,6 @@ def test_realm_contains_token_exchange_providers_and_multiple_users() -> None:
     assert clients["bank-mcp"]["attributes"]["standard.token.exchange.enabled"] == "true"
     assert "bank-mcp-vulnerable" in clients
     assert "duckduckgo-mcp" in clients
-    assert "travel-data-mcp" in clients
 
     users = {item["username"]: item for item in realm["users"]}
     assert {"ivan.petrov", "anna.sokolova", "mikhail.orlov", "elena.smirnova"} <= users.keys()

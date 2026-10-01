@@ -1,10 +1,7 @@
-.PHONY: up up-core down logs ps test lint smoke reset
+.PHONY: up down logs ps test lint smoke reset
 
 up:
 	docker compose up --build -d
-
-up-core:
-	docker compose up --build -d postgres mongo keycloak abs-api memory-orchestrator abs-mcp abs-mcp-vulnerable duckduckgo-mcp booking-mcp expedia-mcp travel-data-mcp travel-agent banking-agent ui
 
 down:
 	docker compose down

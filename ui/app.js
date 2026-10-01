@@ -11,6 +11,7 @@ const state = {
   pendingConfirmation: null,
   dashboard: null,
 };
+const welcomeMessage = "Здравствуйте! Помогу со счетами, операциями, инвестициями и планированием поездки.";
 sessionStorage.setItem("bank.conversation", state.conversationId);
 
 const $ = (id) => document.getElementById(id);
@@ -83,13 +84,21 @@ async function accessToken() {
 
 async function api(path, options = {}) {
   const token = await accessToken();
-  const response = await fetch(`${config.api}${path}`, {
-    ...options,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options.headers || {}) },
-  });
+  let response;
+  try {
+    response = await fetch(`${config.api}${path}`, {
+      ...options,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options.headers || {}) },
+    });
+  } catch (_) {
+    throw new Error("Сервис банка недоступен или соединение прервано. Повторите запрос.");
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || `HTTP ${response.status}`);
+    const error = new Error(body.detail || `HTTP ${response.status}`);
+    error.code = body.code;
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -138,13 +147,62 @@ function addMessage(role, text) {
   list.scrollTop = list.scrollHeight;
 }
 
+function showEmptyConversation() {
+  $("messages").replaceChildren();
+  addMessage("agent", welcomeMessage);
+}
+
+async function loadConversations() {
+  const data = await api("/v1/conversations");
+  const rows = data.conversations || [];
+  const select = $("conversation-select");
+  const options = rows.map((item) => {
+    const option = create("option", "", item.title || "Диалог");
+    option.value = item.conversation_id;
+    return option;
+  });
+  if (!rows.some((item) => item.conversation_id === state.conversationId)) {
+    const current = create("option", "", "Новый диалог");
+    current.value = state.conversationId;
+    options.unshift(current);
+  }
+  select.replaceChildren(...options);
+  select.value = state.conversationId;
+}
+
+async function openConversation(conversationId) {
+  state.conversationId = conversationId;
+  state.pendingConfirmation = null;
+  sessionStorage.setItem("bank.conversation", conversationId);
+  $("confirmation-box").classList.add("hidden");
+  const data = await api(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`);
+  const messages = data.messages || [];
+  if (!messages.length) {
+    showEmptyConversation();
+    return;
+  }
+  $("messages").replaceChildren();
+  messages.forEach((item) => addMessage(item.role === "user" ? "user" : "agent", item.content));
+}
+
+async function startNewConversation() {
+  state.conversationId = crypto.randomUUID();
+  state.pendingConfirmation = null;
+  sessionStorage.setItem("bank.conversation", state.conversationId);
+  $("confirmation-box").classList.add("hidden");
+  showEmptyConversation();
+  await loadConversations();
+}
+
 async function sendChat(message, extra = {}) {
   addMessage("user", message);
   const typing = create("div", "message agent", "Секунду…"); $("messages").append(typing);
   try {
     const result = await api("/v1/chat", { method: "POST", body: JSON.stringify({ message, conversation_id: state.conversationId, ...extra }) });
     typing.remove();
+    setAgentStatus(true);
     addMessage("agent", result.message);
+    await loadConversations();
     if (result.requires_confirmation) {
       state.pendingConfirmation = result.confirmation_id;
       $("confirmation-box").classList.remove("hidden");
@@ -152,7 +210,18 @@ async function sendChat(message, extra = {}) {
       state.pendingConfirmation = null; $("confirmation-box").classList.add("hidden");
     }
     if (["accounts", "operations", "action"].includes(result.intent)) await loadDashboard();
-  } catch (error) { typing.remove(); addMessage("agent", `Ошибка: ${error.message}`); }
+  } catch (error) {
+    typing.remove();
+    const llmError = error.code === "llm_unavailable" || error.code === "llm_invalid_response";
+    if (llmError) setAgentStatus(false);
+    addMessage(llmError ? "agent error" : "agent", `Ошибка: ${error.message}`);
+  }
+}
+
+function setAgentStatus(available) {
+  const status = $("agent-status");
+  status.classList.toggle("unavailable", !available);
+  status.replaceChildren(create("span", "status-dot"), document.createTextNode(available ? " Онлайн" : " ИИ недоступен"));
 }
 
 function isoDate(offset) { const date = new Date(); date.setDate(date.getDate() + offset); return date.toISOString().slice(0, 10); }
@@ -163,6 +232,12 @@ async function init() {
   $("login-view").classList.add("hidden"); $("app-view").classList.remove("hidden");
   $("travel-from").value = isoDate(30); $("travel-to").value = isoDate(37);
   try { await loadDashboard(); } catch (error) { addMessage("agent", `Не удалось загрузить обзор: ${error.message}`); }
+  try {
+    await loadConversations();
+    await openConversation(state.conversationId);
+  } catch (error) {
+    addMessage("agent", `Не удалось загрузить историю диалога: ${error.message}`);
+  }
 }
 
 $("login-button").addEventListener("click", login);
@@ -172,6 +247,8 @@ $("logout-button").addEventListener("click", () => {
   url.search = new URLSearchParams({ id_token_hint: hint, post_logout_redirect_uri: config.redirectUri }); location.assign(url);
 });
 $("chat-form").addEventListener("submit", (event) => { event.preventDefault(); const input = $("chat-input"); if (input.value.trim()) sendChat(input.value.trim()); input.value = ""; });
+$("new-chat").addEventListener("click", startNewConversation);
+$("conversation-select").addEventListener("change", (event) => openConversation(event.target.value));
 document.querySelectorAll("[data-prompt]").forEach((button) => button.addEventListener("click", () => sendChat(button.dataset.prompt)));
 $("prepare-transfer").addEventListener("click", () => sendChat("Подготовь перевод по указанным реквизитам", { action: { type: "transfer", parameters: { from_account: $("transfer-from").value, to_account: $("transfer-to").value, amount: $("transfer-amount").value, description: "Перевод из интернет-банка" } } }));
 $("confirm-button").addEventListener("click", () => state.pendingConfirmation && sendChat("Подтверждаю подготовленную операцию", { confirm_action_id: state.pendingConfirmation }));

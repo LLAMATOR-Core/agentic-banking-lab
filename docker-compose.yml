@@ -117,6 +117,11 @@ services:
       MONGODB_DATABASE: agent_memory
       ALLOWED_AZP: banking-agent
       EXPECTED_AUDIENCE: memory-orchestrator
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
     ports: ["127.0.0.1:8002:8002"]
     depends_on:
       mongo: {condition: service_healthy}
@@ -162,55 +167,27 @@ services:
     environment:
       <<: *python-env
       PORT: 8105
-      ALLOWED_AZP: banking-agent
+      ALLOWED_AZP: banking-agent,travel-agent
       EXPECTED_AUDIENCE: duckduckgo-mcp
     ports: ["127.0.0.1:8105:8105"]
     depends_on:
       keycloak-configurator: {condition: service_completed_successfully}
 
-  booking-mcp:
-    <<: *python-service
+  aviasales-mcp:
     build:
-      context: .
-      args: {APP_MODULE: services.booking_mcp.app}
+      context: https://github.com/stufently/aviasales-mcp.git#bb92f4c6f28510f10a3d807983c66af7e8e8579f
     environment:
-      <<: *python-env
-      PORT: 8102
-      ALLOWED_AZP: travel-agent
-      EXPECTED_AUDIENCE: booking-mcp
-    ports: ["127.0.0.1:8102:8102"]
-    depends_on:
-      keycloak-configurator: {condition: service_completed_successfully}
-
-  expedia-mcp:
-    <<: *python-service
-    build:
-      context: .
-      args: {APP_MODULE: services.expedia_mcp.app}
-    environment:
-      <<: *python-env
-      PORT: 8103
-      ALLOWED_AZP: travel-agent
-      EXPECTED_AUDIENCE: expedia-mcp
-    ports: ["127.0.0.1:8103:8103"]
-    depends_on:
-      keycloak-configurator: {condition: service_completed_successfully}
-
-  travel-data-mcp:
-    <<: *python-service
-    build:
-      context: .
-      args: {APP_MODULE: services.travel_data_mcp.app}
-    environment:
-      <<: *python-env
-      PORT: 8106
-      ALLOWED_AZP: travel-agent
-      EXPECTED_AUDIENCE: travel-data-mcp
-      DUFFEL_ACCESS_TOKEN: ${DUFFEL_ACCESS_TOKEN:-}
-      DUFFEL_BASE_URL: ${DUFFEL_BASE_URL:-https://api.duffel.com}
+      AVIASALES_API_TOKEN: ${AVIASALES_API_TOKEN:-}
+      AVIASALES_PARTNER_ID: ${AVIASALES_PARTNER_ID:-}
+      AVIASALES_DEFAULT_CURRENCY: ${AVIASALES_DEFAULT_CURRENCY:-rub}
+      AVIASALES_MARKET: ${AVIASALES_MARKET:-ru}
+      AVIASALES_LOCALE: ${AVIASALES_LOCALE:-ru}
+      MCP_PORT: 8106
+      MCP_HOST: 0.0.0.0
+      MCP_AUTH_TOKEN: ${AVIASALES_MCP_AUTH_TOKEN:-local-aviasales-mcp}
     ports: ["127.0.0.1:8106:8106"]
-    depends_on:
-      keycloak-configurator: {condition: service_completed_successfully}
+    restart: unless-stopped
+    networks: [stand]
 
   travel-agent:
     <<: *python-service
@@ -222,14 +199,21 @@ services:
       PORT: 8003
       ALLOWED_AZP: banking-agent
       EXPECTED_AUDIENCE: travel-agent
-      BOOKING_MCP_URL: http://booking-mcp:8102/mcp
-      EXPEDIA_MCP_URL: http://expedia-mcp:8103/mcp
-      TRAVEL_DATA_MCP_URL: http://travel-data-mcp:8106/mcp
+      DUCKDUCKGO_MCP_URL: http://duckduckgo-mcp:8105/mcp
+      BOOKING_MCP_URL: ${BOOKING_MCP_URL:-https://mcp.hasdata.com/mcp?apis=booking}
+      HASDATA_API_KEY: ${HASDATA_API_KEY:-}
+      AVIASALES_MCP_URL: http://aviasales-mcp:8106/mcp
+      AVIASALES_MCP_AUTH_TOKEN: ${AVIASALES_MCP_AUTH_TOKEN:-local-aviasales-mcp}
       SERVICE_CLIENT_ID: travel-agent
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_TRAVEL_AGENT_SECRET:-travel-agent-secret}
       PUBLIC_BASE_URL: http://localhost:8003
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
     ports: ["8003:8003"]
-    depends_on: [booking-mcp, expedia-mcp, travel-data-mcp]
+    depends_on: [duckduckgo-mcp, aviasales-mcp]
 
   banking-agent:
     <<: *python-service
@@ -249,7 +233,13 @@ services:
       SERVICE_CLIENT_ID: banking-agent
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_BANKING_AGENT_SECRET:-banking-agent-secret}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
+      MEMORY_HTTP_TIMEOUT_SECONDS: ${MEMORY_HTTP_TIMEOUT_SECONDS:-60}
+      TRAVEL_HTTP_TIMEOUT_SECONDS: ${TRAVEL_HTTP_TIMEOUT_SECONDS:-180}
+      BANK_TIMEZONE: ${BANK_TIMEZONE:-Europe/Moscow}
     ports: ["8000:8000"]
     depends_on:
       [abs-mcp, abs-mcp-vulnerable, duckduckgo-mcp, memory-orchestrator, travel-agent]

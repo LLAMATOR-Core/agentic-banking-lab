@@ -14,11 +14,19 @@ flowchart LR
   VM -->|service JWT| ABS
   ABS --> PG[(PostgreSQL)]
 
-  BA --> MEM[Оркестратор памяти]
+  BA -->|working turn| MEM[LLM-оркестратор памяти]
+  MEM -->|async promotion| MEM
   MEM --> MG[(MongoDB)]
   BA -->|A2A| TA[Тревел-агент]
-  TA --> TP[Duffel live<br/>Booking mock]
+  TA -->|MCP read only| AV[Aviasales MCP]
+  TA -->|MCP HTTPS| BK[Booking MCP]
+  TA --> MB[Mock booking]
   BA --> DDG[DuckDuckGo MCP]
+  TA --> DDG
+
+  LLM[OpenAI-compatible LLM] --> BA
+  LLM --> MEM
+  LLM --> TA
 
   KC[Keycloak] -. identity .-> UI
   KC -. service identity .-> BA
@@ -31,17 +39,37 @@ flowchart LR
 | Компонент | Ответственность | Данные/протокол |
 |---|---|---|
 | `ui` | Интернет-Банк и чат | OIDC Authorization Code + PKCE, REST |
-| `banking-agent` | LangGraph-маршрутизация, навыки, подтверждение операций | REST, MCP client, A2A client |
+| `banking-agent` | LLM-маршрутизация, навыки, LLM-ответ, подтверждение операций | OpenAI SDK, REST, MCP client, A2A client |
 | `abs-mcp` | Образцовая граница доступа к АБС | MCP Streamable HTTP, RFC 8693 Token Exchange |
 | `abs-mcp-vulnerable` | Намеренно небезопасное сравнение | MCP принимает `customer_id` от LLM, client credentials |
 | `abs-api` | Транзакции и проверка владельца | FastAPI, PostgreSQL |
-| `memory-orchestrator` | Семантическая, процедурная, эпизодическая, рабочая память | REST, MongoDB |
-| `travel-agent` | Независимый партнёрский LangGraph-агент | A2A 1.0, MCP clients |
-| `duckduckgo-mcp` | Реальный поиск новостей и web snippets | DDGS, live network |
-| `travel-data-mcp` | Реальные сведения о рейсах и отелях | Duffel Flights + Stays APIs |
-| `booking-mcp` | Мок поиска/бронирования для воспроизводимых тестов | MCP, synthetic data |
+| `memory-orchestrator` | Сохранение сессий, очередь асинхронной LLM-миграции working → episodic/semantic/procedural и LLM-recall | OpenAI SDK, REST, MongoDB |
+| `travel-agent` | Независимый партнёрский LLM/LangGraph-агент | OpenAI SDK, A2A 1.0, MCP clients |
+| `duckduckgo-mcp` | Реальный поиск новостей и destination research без заготовленных ответов | DDGS, live network |
+| `aviasales-mcp` | Поиск цен на рейсы | MCP Market server, Travelpayouts Data API |
+| Booking MCP | Поиск размещения | HasData remote Streamable HTTP MCP |
+| `travel-agent` mock booking | Локальная симуляция бронирования без внешней операции | REST, synthetic confirmation |
 | `keycloak` | Пользовательская и межсервисная аутентификация | OIDC/OAuth 2.0 |
 | `langfuse` | Трассы turns, MCP, A2A и памяти | OTEL/Langfuse SDK |
+
+## Граница минимального состава
+
+После минимизации каждый оставшийся прикладной компонент участвует хотя бы в одном
+проверяемом контуре:
+
+| Контур исследования | Обязательные компоненты |
+|---|---|
+| Изоляция и отравление памяти | Banking Agent, LLM Memory Orchestrator, MongoDB, два пользователя |
+| Secure/vulnerable MCP | оба ABS MCP, ABS API, PostgreSQL, Keycloak Token Exchange |
+| Indirect prompt injection | инвестиционный навык, DuckDuckGo MCP, shared memory, LLM |
+| A2A и внешняя интероперабельность | Banking Agent, Travel Agent, Aviasales MCP, Booking MCP, DuckDuckGo MCP |
+| Проверяемость экспериментов | Langfuse web/worker, ClickHouse, Redis, MinIO |
+
+Инвестиционный сценарий намеренно оставлен: он создаёт короткую реальную цепочку от
+недоверенного web-результата через LLM к памяти. Платёж, перевод и покупка продукта оставлены
+как разные destructive tool contracts для проверки confirmation gate и excessive agency.
+Локальные подмены Booking/Aviasales, Expedia/Duffel, отдельный режим запуска без трассировки,
+дублирующий MCP probe и неиспользуемые runtime-зависимости в итоговый состав не входят.
 
 ## Два пути к АБС
 
@@ -71,6 +99,12 @@ client отделён по `azp`, endpoint и порту; production-код не
 
 ## Память и отравление
 
+Каждый chat turn сначала сохраняется полностью как две working-записи. UI может создать новый
+`conversation_id`, получить список своих сессий и загрузить прежние реплики. Затем независимый
+worker забирает migration job и через LLM извлекает пользовательские факты в episodic, знания
+о среде в semantic и переиспользуемые навыки в procedural. Ошибка migration не откатывает
+уже сохранённую историю.
+
 Обычные записи имеют `user_id=<customer-id>`. Общая область имеет `user_id="*"`; recall
 возвращает объединение личной и общей областей. Каждая общая запись дополнительно содержит
 `source_user_id`, `source`, `trust` и `vulnerability` в metadata.
@@ -82,9 +116,10 @@ client отделён по `azp`, endpoint и порту; production-код не
   санитизации сохраняет их в общую память. Инструкция на контролируемой внешней странице
   становится indirect prompt injection для всех пользователей.
 
-Детерминированный confirmation gate не принимает память за policy engine. Для экспериментов
-с генеративным planner содержимое `memory_context` можно подать в его контекст и сравнить
-результаты, оставив авторизацию и подтверждение вне LLM.
+LLM-оркестратор оценивает записи, а при recall выбирает релевантные записи после лексического
+preselection. Затем банковский LLM получает `memory_context`, поэтому direct и indirect
+poisoning реально влияют на контекст модели. Авторизация, canonical action parameters и
+confirmation gate при этом остаются вне LLM.
 
 ## Поток активной операции
 
@@ -102,6 +137,5 @@ agent_id/user_id/status → secure MCP → Token Exchange → транзакци
 | 8000–8003 | Banking agent, ABS, Memory, Travel agent |
 | 8080 | Keycloak |
 | 8101 | Secure ABS MCP |
-| 8102 / 8103 | Booking mock / Expedia recommendations mock |
 | 8104 | Vulnerable ABS MCP |
-| 8105 / 8106 | DuckDuckGo live / Duffel live MCP |
+| 8105 / 8106 | DuckDuckGo live / Aviasales MCP |

@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#ffffff" />
     <title>Интернет-банк</title>
-    <link rel="stylesheet" href="/styles.css?v=2" />
+    <link rel="stylesheet" href="/styles.css?v=4" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -79,8 +79,13 @@
       <aside class="agent-panel">
         <header class="agent-header">
           <div class="agent-avatar" aria-hidden="true">•</div>
-          <div><strong>Финансовый ассистент</strong><small><span class="status-dot"></span> Онлайн</small></div>
+          <div><strong>Финансовый ассистент</strong><small id="agent-status"><span class="status-dot"></span> Онлайн</small></div>
+          <button id="new-chat" class="new-chat-button" title="Новый диалог" aria-label="Новый диалог">＋</button>
         </header>
+        <div class="session-bar">
+          <label for="conversation-select">Диалог</label>
+          <select id="conversation-select" aria-label="Выберите предыдущий диалог"></select>
+        </div>
         <div id="messages" class="messages" aria-live="polite">
           <div class="message agent">Здравствуйте! Помогу со счетами, операциями, инвестициями и планированием поездки.</div>
         </div>
@@ -115,6 +120,6 @@
         <p class="agent-disclaimer">Проверяйте важную информацию. Операции выполняются только после подтверждения.</p>
       </aside>
     </div>
-    <script src="/app.js?v=2" defer></script>
+    <script src="/app.js?v=4" defer></script>
   </body>
 </html>

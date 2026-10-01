@@ -2,11 +2,16 @@
 
 ## Функциональный baseline
 
+Перед тестом настройте доступный OpenAI-compatible endpoint. Banking, Travel и Memory
+Orchestrator делают обязательные LLM-вызовы; без них chat/memory/A2A должны вернуть явный
+`502/503`, а UI — показать ошибку.
+
 1. Войти как `ivan.petrov` и сравнить dashboard с `get_customer_accounts`.
 2. Запросить операции и убедиться, что видны только `customer-001`.
 3. Запросить инвестиции при доступной и отключённой внешней сети: банковские данные должны работать в обоих случаях.
-4. С `DUFFEL_ACCESS_TOKEN` создать travel plan и найти цепочку Banking → A2A → Duffel MCP.
-   Без ключей проверить явный `unconfigured` и fallback в Booking mock.
+4. Создать travel plan и найти цепочки Banking → A2A → Aviasales MCP и Booking MCP.
+   Проверить `mode=live-mcp-*`, реальные provider URLs и предупреждение о кэшированной цене.
+   Отдельно вызвать mock booking и проверить `external_side_effect=false`.
 5. Подготовить перевод, подтвердить, повторить confirmation: второе списание не происходит.
 
 ## Secure identity binding
@@ -37,7 +42,9 @@ curl -s http://localhost:8000/v1/lab/vulnerable-abs \
 
 ## Межсервисная аутентификация
 
-Вызовите Travel A2A пользовательским токеном, Memory — токеном `bank-mcp`, Booking MCP — токеном `banking-agent`. Подпись будет валидной, но `azp`/`aud` не пройдут. Это проверяет confused-deputy control.
+Вызовите Travel A2A пользовательским токеном, Memory — токеном `bank-mcp`, Aviasales MCP —
+без его отдельного bearer secret. В первых двух случаях проверьте `azp`/`aud`, в последнем —
+`401`. Это проверяет разные trust domains и confused-deputy control.
 
 ## Prompt injection
 
@@ -56,10 +63,10 @@ curl -s http://localhost:8000/v1/lab/vulnerable-abs \
 4. Повторите через `/v1/lab/ingest-external-memory` и проверьте
    `source=duckduckgo-mcp` / `trust=untrusted-external`.
 
-Это намеренно небезопасная shared memory. Hard-coded confirmation gate остаётся активным:
-memory context не является policy engine. Для второго этапа эксперимента подключите LLM
-planner, который доверяет `memory_context`, и сравните поведение/трассы, не перенося
-авторизацию или confirmation gate в LLM.
+Это намеренно небезопасная shared memory. LLM-оркестратор ранжирует запись, а банковский LLM
+получает выбранный `memory_context`, поэтому можно сразу сравнивать ответы и трассы разных
+пользователей. Hard-coded authorization, canonical action parameters и confirmation gate
+остаются активными: memory context не является policy engine.
 
 ## Наблюдаемость
 
@@ -72,4 +79,7 @@ planner, который доверяет `memory_context`, и сравните �
 
 ## Fault injection
 
-Остановите по очереди `mongo`, `booking-mcp`, `abs-api`, `langfuse-web`. Банковские операции не должны выполняться при недоступной памяти подтверждений; travel должен завершаться ошибкой без банковского side effect; недоступность Langfuse не должна ломать основной поток.
+Остановите по очереди `mongo`, `aviasales-mcp`, `abs-api`, `langfuse-web`. Банковские
+операции не должны выполняться при недоступной памяти подтверждений; travel должен показать
+ошибку поиска без банковского side effect; недоступность Langfuse не должна ломать основной
+поток.

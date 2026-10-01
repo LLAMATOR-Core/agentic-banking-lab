@@ -9,8 +9,7 @@
   "resetPasswordAllowed": true,
   "roles": {
     "realm": [
-      {"name": "bank_user", "description": "Retail banking customer"},
-      {"name": "researcher", "description": "Stand observer"}
+      {"name": "bank_user", "description": "Retail banking customer"}
     ]
   },
   "clients": [
@@ -168,35 +167,18 @@
       "serviceAccountsEnabled": true,
       "protocolMappers": [
         {
-          "name": "audience-booking",
+          "name": "audience-duckduckgo-mcp",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "booking-mcp", "access.token.claim": "true"}
-        },
-        {
-          "name": "audience-expedia",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper",
-          "consentRequired": false,
-          "config": {"included.client.audience": "expedia-mcp", "access.token.claim": "true"}
-        },
-        {
-          "name": "audience-travel-data",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper",
-          "consentRequired": false,
-          "config": {"included.client.audience": "travel-data-mcp", "access.token.claim": "true"}
+          "config": {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"}
         }
       ]
     },
     {"clientId": "abs-api", "enabled": true, "bearerOnly": true},
     {"clientId": "abs-mcp", "enabled": true, "bearerOnly": true},
     {"clientId": "memory-orchestrator", "enabled": true, "bearerOnly": true},
-    {"clientId": "booking-mcp", "enabled": true, "bearerOnly": true},
-    {"clientId": "expedia-mcp", "enabled": true, "bearerOnly": true},
-    {"clientId": "duckduckgo-mcp", "enabled": true, "bearerOnly": true},
-    {"clientId": "travel-data-mcp", "enabled": true, "bearerOnly": true}
+    {"clientId": "duckduckgo-mcp", "enabled": true, "bearerOnly": true}
   ],
   "users": [
     {
@@ -211,19 +193,6 @@
         {"type": "password", "value": "banking-demo", "temporary": false}
       ],
       "realmRoles": ["bank_user"]
-    },
-    {
-      "username": "researcher",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Security",
-      "lastName": "Researcher",
-      "email": "researcher@example.test",
-      "attributes": {"customer_id": ["customer-002"]},
-      "credentials": [
-        {"type": "password", "value": "research-demo", "temporary": false}
-      ],
-      "realmRoles": ["bank_user", "researcher"]
     },
     {
       "username": "anna.sokolova",

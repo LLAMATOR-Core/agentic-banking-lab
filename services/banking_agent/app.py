@@ -4,13 +4,17 @@ import asyncio
 import os
 from typing import Annotated, Any
 
+import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 
 from services.banking_agent.clients import MemoryClient, TravelA2AClient
 from services.banking_agent.graph import BankingGraph
 from services.banking_agent.skills import BankingSkills
 from services.common.auth import Principal, ServiceTokenProvider, require_principal
+from services.common.llm import LLMClient, install_llm_error_handlers
 from services.common.mcp import MCPClient
 from services.common.schemas import (
     ChatRequest,
@@ -24,14 +28,43 @@ from services.common.tracing import observation
 tokens = ServiceTokenProvider()
 memory = MemoryClient(tokens)
 travel = TravelA2AClient(tokens)
-skills = BankingSkills(memory, travel, tokens)
-banking_graph = BankingGraph(memory, skills)
+llm = LLMClient("banking-agent")
+skills = BankingSkills(memory, travel, tokens, llm)
+banking_graph = BankingGraph(memory, skills, llm)
 abs_mcp = MCPClient(os.getenv("ABS_MCP_URL", "http://abs-mcp:8101/mcp"))
 abs_mcp_vulnerable = MCPClient(
     os.getenv("ABS_MCP_VULNERABLE_URL", "http://abs-mcp-vulnerable:8104/mcp")
 )
 
 app = FastAPI(title="Banking LangGraph Agent", version="0.1.0")
+install_llm_error_handlers(app)
+
+
+@app.exception_handler(httpx.TimeoutException)
+async def dependency_timeout_handler(_: Request, __: httpx.TimeoutException) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "Сервис памяти или банковская интеграция не успели ответить. "
+                "Повторите запрос."
+            ),
+            "code": "dependency_timeout",
+        },
+    )
+
+
+@app.exception_handler(httpx.HTTPError)
+async def dependency_error_handler(_: Request, __: httpx.HTTPError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Внутренний сервис агента временно недоступен. Повторите запрос.",
+            "code": "dependency_unavailable",
+        },
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -43,8 +76,8 @@ Caller = Annotated[Principal, Depends(require_principal)]
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "banking-agent"}
+async def health() -> dict[str, Any]:
+    return {"status": "ok", "service": "banking-agent", "llm": llm.public_config()}
 
 
 @app.get("/v1/capabilities")
@@ -52,6 +85,7 @@ async def capabilities(_: Caller) -> dict[str, Any]:
     return {
         "agent_id": "banking-agent",
         "framework": "LangGraph",
+        "llm": llm.public_config(),
         "skills": ["accounts", "operations", "investments", "financial-actions", "travel"],
         "protocols": {"tools": "MCP 2025-06-18", "agent_interop": "A2A 1.0 HTTP+JSON"},
         "memory_types": ["semantic", "procedural", "episodic", "working"],
@@ -64,7 +98,9 @@ async def dashboard(
 ) -> dict[str, Any]:
     _customer_id(caller)
     access_token = authorization.split(" ", 1)[1]
-    with observation("banking.dashboard", user_id=caller.customer_id) as span:
+    with observation(
+        "banking.dashboard", user_id=caller.customer_id, agent_id="banking-agent"
+    ) as span:
         customer, accounts, operations, portfolio, products = await asyncio.gather(
             abs_mcp.call("get_customer_info", {}, access_token),
             abs_mcp.call("get_customer_accounts", {}, access_token),
@@ -80,6 +116,32 @@ async def dashboard(
         "portfolio": portfolio,
         "products": products,
     }
+
+
+@app.get("/v1/conversations")
+async def conversations(caller: Caller) -> dict[str, Any]:
+    user_id = _customer_id(caller)
+    with observation(
+        "banking.conversations", user_id=user_id, agent_id="banking-agent"
+    ) as span:
+        rows = await memory.conversations(user_id)
+        span.update(output={"count": len(rows)})
+    return {"conversations": rows}
+
+
+@app.get("/v1/conversations/{conversation_id}/messages")
+async def conversation_messages(conversation_id: str, caller: Caller) -> dict[str, Any]:
+    user_id = _customer_id(caller)
+    with observation(
+        "banking.conversation-history",
+        input={"conversation_id": conversation_id},
+        user_id=user_id,
+        session_id=conversation_id,
+        agent_id="banking-agent",
+    ) as span:
+        rows = await memory.conversation_messages(user_id, conversation_id)
+        span.update(output={"count": len(rows)})
+    return {"conversation_id": conversation_id, "messages": rows}
 
 
 @app.post("/v1/chat", response_model=ChatResponse)
@@ -108,6 +170,7 @@ async def chat(
         metadata={"agent_id": "banking-agent"},
         user_id=user_id,
         session_id=request.conversation_id,
+        agent_id="banking-agent",
     ) as span:
         try:
             result = await banking_graph.graph.ainvoke(graph_input)
