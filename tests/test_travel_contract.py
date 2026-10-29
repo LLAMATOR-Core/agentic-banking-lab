@@ -12,11 +12,13 @@ from services.banking_agent.skills import BankingSkills
 from services.common.mcp import MCPClient
 
 
-def test_compose_uses_real_booking_and_aviasales_mcp_servers() -> None:
+def test_compose_uses_remote_booking_and_separate_mock_flights_mcp() -> None:
     compose = Path("docker-compose.yml").read_text(encoding="utf-8")
     graph = Path("services/travel_agent/graph.py").read_text(encoding="utf-8")
 
-    assert "github.com/stufently/aviasales-mcp.git" in compose
+    assert "services.flights_mcp.app" in compose
+    assert "http://flights-mcp:8106/mcp" in compose
+    assert "aviasales" not in compose.lower()
     assert "https://mcp.hasdata.com/mcp?apis=booking" in compose
     assert "hasdata_booking_search_getBookingSearchResults" in graph
     assert '"search_flights"' in graph

@@ -83,11 +83,11 @@
       "serviceAccountsEnabled": true,
       "protocolMappers": [
         {
-          "name": "audience-memory",
+          "name": "audience-memory-service",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "memory-orchestrator", "access.token.claim": "true"}
+          "config": {"included.client.audience": "memory-service", "access.token.claim": "true"}
         },
         {
           "name": "audience-travel-agent",
@@ -175,8 +175,28 @@
         }
       ]
     },
+    {
+      "clientId": "memory-operator",
+      "name": "Memory Orchestrator operator",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${KEYCLOAK_MEMORY_OPERATOR_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience-memory-orchestrator",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {"included.client.audience": "memory-orchestrator", "access.token.claim": "true"}
+        }
+      ]
+    },
     {"clientId": "abs-api", "enabled": true, "bearerOnly": true},
     {"clientId": "abs-mcp", "enabled": true, "bearerOnly": true},
+    {"clientId": "memory-service", "enabled": true, "bearerOnly": true},
     {"clientId": "memory-orchestrator", "enabled": true, "bearerOnly": true},
     {"clientId": "duckduckgo-mcp", "enabled": true, "bearerOnly": true}
   ],

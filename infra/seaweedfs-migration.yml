@@ -1,0 +1,5 @@
+# Temporarily start SeaweedFS alongside the old store without taking its host port.
+# docker compose -f docker-compose.yml -f infra/seaweedfs-migration.yml up -d --wait seaweedfs
+services:
+  seaweedfs:
+    ports: !reset []

@@ -82,7 +82,7 @@ async def agent_card() -> dict[str, Any]:
     return {
         "name": "Bank Partner Travel Agent",
         "description": (
-            "LLM agent combining Booking and Aviasales MCP data, local mock booking, "
+            "LLM agent combining live Booking and synthetic Flights MCP data, local mock booking, "
             "and recommendations."
         ),
         "supportedInterfaces": [
@@ -115,7 +115,9 @@ async def agent_card() -> dict[str, Any]:
             {
                 "id": "plan-trip",
                 "name": "Plan a trip",
-                "description": "Combines Aviasales and Booking MCP results with recommendations.",
+                "description": (
+                    "Combines synthetic Flights and live Booking MCP results with recommendations."
+                ),
                 "tags": ["travel", "flights", "accommodation"],
                 "inputModes": ["application/json"],
                 "outputModes": ["application/json"],

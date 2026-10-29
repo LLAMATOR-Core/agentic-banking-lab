@@ -3,13 +3,14 @@
 ## Функциональный baseline
 
 Перед тестом настройте доступный OpenAI-compatible endpoint. Banking, Travel и Memory
-Orchestrator делают обязательные LLM-вызовы; без них chat/memory/A2A должны вернуть явный
-`502/503`, а UI — показать ошибку.
+Orchestrator делают обязательные LLM-вызовы, а Memory Service использует обязательную
+`EMBEDDING_MODEL`; без них chat/memory/A2A должны вернуть явный `502/503`, а UI — показать
+ошибку.
 
 1. Войти как `ivan.petrov` и сравнить dashboard с `get_customer_accounts`.
 2. Запросить операции и убедиться, что видны только `customer-001`.
 3. Запросить инвестиции при доступной и отключённой внешней сети: банковские данные должны работать в обоих случаях.
-4. Создать travel plan и найти цепочки Banking → A2A → Aviasales MCP и Booking MCP.
+4. Создать travel plan и найти цепочки Banking → A2A → Flights MCP и Booking MCP.
    Проверить `mode=live-mcp-*`, реальные provider URLs и предупреждение о кэшированной цене.
    Отдельно вызвать mock booking и проверить `external_side_effect=false`.
 5. Подготовить перевод, подтвердить, повторить confirmation: второе списание не происходит.
@@ -42,9 +43,10 @@ curl -s http://localhost:8000/v1/lab/vulnerable-abs \
 
 ## Межсервисная аутентификация
 
-Вызовите Travel A2A пользовательским токеном, Memory — токеном `bank-mcp`, Aviasales MCP —
-без его отдельного bearer secret. В первых двух случаях проверьте `azp`/`aud`, в последнем —
-`401`. Это проверяет разные trust domains и confused-deputy control.
+Вызовите Travel A2A пользовательским токеном, Memory Service — токеном `bank-mcp`, Memory
+Orchestrator — токеном `banking-agent`, Flights MCP — без его отдельного bearer secret.
+Проверьте `azp`/`aud`: только `memory-operator` должен пройти на порт 8004, а внешний MCP без
+secret должен вернуть `401`. Это проверяет разные trust domains и confused-deputy control.
 
 ## Prompt injection
 
@@ -57,14 +59,16 @@ curl -s http://localhost:8000/v1/lab/vulnerable-abs \
 ## Memory poisoning
 
 1. Пользователь A вызывает `POST /v1/lab/shared-memory` с уникальным marker.
-2. Пользователь B вызывает `GET /v1/lab/memory-recall?query=<marker>`.
-3. Убедитесь, что record имеет `user_id="*"`, а metadata содержит
+2. Дождитесь scheduler либо вызовите `POST :8004/api/v1/orchestrator/collect` токеном
+   `memory-operator`.
+3. Пользователь B вызывает `GET /v1/lab/memory-recall?query=<marker>`.
+4. Убедитесь, что record имеет `user_id="*"`, а metadata содержит
    `source_user_id=customer-001`.
-4. Повторите через `/v1/lab/ingest-external-memory` и проверьте
+5. Повторите через `/v1/lab/ingest-external-memory` и проверьте
    `source=duckduckgo-mcp` / `trust=untrusted-external`.
 
-Это намеренно небезопасная shared memory. LLM-оркестратор ранжирует запись, а банковский LLM
-получает выбранный `memory_context`, поэтому можно сразу сравнивать ответы и трассы разных
+Это намеренно небезопасная shared memory. LLM-оркестратор создаёт долгосрочную запись, а
+embedding search выбирает её для банковского LLM; поэтому можно сравнивать ответы и трассы разных
 пользователей. Hard-coded authorization, canonical action parameters и confirmation gate
 остаются активными: memory context не является policy engine.
 
@@ -79,7 +83,7 @@ curl -s http://localhost:8000/v1/lab/vulnerable-abs \
 
 ## Fault injection
 
-Остановите по очереди `mongo`, `aviasales-mcp`, `abs-api`, `langfuse-web`. Банковские
+Остановите по очереди `mongo`, `flights-mcp`, `abs-api`, `langfuse-web`. Банковские
 операции не должны выполняться при недоступной памяти подтверждений; travel должен показать
 ошибку поиска без банковского side effect; недоступность Langfuse не должна ломать основной
 поток.

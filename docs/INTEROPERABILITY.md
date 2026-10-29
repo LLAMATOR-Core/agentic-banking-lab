@@ -3,9 +3,9 @@
 ## MCP
 
 Собственные MCP-серверы предоставляют stateless Streamable HTTP endpoint `POST /mcp`,
-protocol version `2025-06-18`, и методы `initialize`, `tools/list`, `tools/call`. Внешний
-Aviasales MCP использует stateful Streamable HTTP: клиент выполняет handshake, отправляет
-`notifications/initialized` и сохраняет `Mcp-Session-Id`. Клиент понимает JSON и SSE ответы,
+protocol version `2025-06-18`, и методы `initialize`, `tools/list`, `tools/call`. Flights MCP
+также stateless; клиент выполняет handshake и отправляет `notifications/initialized`.
+Для stateful внешних серверов клиент сохраняет `Mcp-Session-Id`. Клиент понимает JSON и SSE ответы,
 а также `structuredContent` и JSON внутри text content.
 
 Пример discovery (нужен user access token):
@@ -40,7 +40,7 @@ security contract. Сервер на `8104` — намеренный антип�
 | `:8101/mcp` | secure, Keycloak Token Exchange | банковские read/write tools |
 | `:8104/mcp` | намеренно уязвимый | те же tools + обязательный `customer_id` |
 | `:8105/mcp` | live DuckDuckGo для Banking и Travel Agent | `news_search`, `text_search` |
-| `:8106/mcp` | self-hosted Aviasales MCP | `search_flights` и 12 read-only lookup/price tools |
+| `:8106/mcp` | мок внешнего Flights MCP, отдельный bearer secret | `search_flights`, только синтетические предложения |
 | `https://mcp.hasdata.com/mcp?apis=booking` | remote Booking MCP | search + property details |
 
 ## A2A 1.0
@@ -83,11 +83,18 @@ DataPart запроса:
 
 ## Реальные MCP источников и mock booking
 
-Для рейсов Compose собирает `stufently/aviasales-mcp` из закреплённого upstream commit и запускает его
-в Streamable HTTP режиме на `:8106/mcp`. Travel Agent сначала вызывает `tools/list`, адаптирует
-канонические поля к опубликованной schema, затем вызывает `search_flights`. Серверу нужен
-`AVIASALES_API_TOKEN`; его Data API использует кэш недавних поисков, поэтому цена не означает
-live-наличие. Сервер read-only и не бронирует.
+Для рейсов Compose собирает собственный `services/flights_mcp` и запускает отдельный
+контейнер `flights-mcp` на `:8106/mcp`. Это мок внешнего поставщика: отдельный bearer secret
+`FLIGHTS_MCP_AUTH_TOKEN`, без Keycloak, банковской identity и внешнего API. Даже
+`AUTH_DISABLED=true` не отключает его проверку bearer. Travel Agent вызывает `tools/list`,
+затем `search_flights` с `origin`, `destination` (IATA), `departure_date`, необязательным
+`return_date`, `adults`, `currency`, `max_results` (1–10). Даты и маршрут валидируются;
+лишние поля, включая `customer_id`, запрещены. Одинаковый запрос возвращает одинаковые
+синтетические предложения. `price` — условная сумма за всех пассажиров и все участки,
+без привязки к рыночным тарифам. Каждый результат содержит `synthetic=true`,
+`mode=mock-external-mcp`, `content_trust=untrusted-external`, `booking_supported=false`.
+Никаких продаж, запросов авиакомпаниям или сетевых fallback нет. Ошибка MCP остаётся
+в `search_errors`, мок внутри Travel Agent вместо сетевого ответа не подставляется.
 
 Для отелей Travel Agent напрямую подключён к remote MCP
 `https://mcp.hasdata.com/mcp?apis=booking` с `x-api-key`. Используется read-only tool
@@ -109,8 +116,8 @@ DuckDuckGo вынесен из процесса агента в отдельны
 подменяется synthetic news: инвестиционные продукты/портфель продолжают работать, а
 `news=[]` показывает деградацию.
 
-`AVIASALES_API_TOKEN` принадлежит контейнеру Aviasales MCP и не передаётся Travel Agent.
-Между Travel Agent и этим MCP используется отдельный bearer secret. `HASDATA_API_KEY`
+Между Travel Agent и Flights MCP используется только отдельный bearer secret.
+API-токены авиакомпаний не нужны. `HASDATA_API_KEY`
 необходим Travel Agent как credential удалённого MCP; redaction и запрет trace body для
 headers обязательны.
 

@@ -187,12 +187,11 @@ class BankingSkills:
         action_type = action["type"]
         parameters = self._validate_action(action_type, action["parameters"])
         expires_at = datetime.now(UTC) + timedelta(minutes=15)
-        record = await self.memory.create(
+        record = await self.memory.create_action(
             user_id=state["user_id"],
-            memory_type="working",
-            content=f"Pending financial action: {action_type}",
             conversation_id=state["conversation_id"],
-            metadata={"status": "pending", "action_type": action_type, "parameters": parameters},
+            action_type=action_type,
+            parameters=parameters,
             expires_at=expires_at,
         )
         description = self._action_description(action_type, parameters)
@@ -212,7 +211,7 @@ class BankingSkills:
         action_id = state.get("confirm_action_id")
         if not action_id:
             return await self.prepare_action(state)
-        record = await self.memory.get(action_id)
+        record = await self.memory.get_action(action_id, state["user_id"])
         if record.get("agent_id") != "banking-agent" or record.get("user_id") != state["user_id"]:
             raise ValueError("Подтверждение не найдено для текущего пользователя")
         metadata = record.get("metadata") or {}
@@ -244,8 +243,9 @@ class BankingSkills:
             {**parameters, "idempotency_key": action_id},
             state["access_token"],
         )
-        await self.memory.patch_metadata(
+        await self.memory.patch_action(
             action_id,
+            state["user_id"],
             {"status": "executed", "executed_at": datetime.now(UTC).isoformat(), "result": result},
         )
         return {

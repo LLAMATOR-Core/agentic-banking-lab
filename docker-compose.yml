@@ -67,6 +67,7 @@ services:
       KEYCLOAK_BANK_MCP_SECRET: ${KEYCLOAK_BANK_MCP_SECRET:-bank-mcp-secret}
       KEYCLOAK_BANK_MCP_VULNERABLE_SECRET: ${KEYCLOAK_BANK_MCP_VULNERABLE_SECRET:-bank-mcp-vulnerable-secret}
       KEYCLOAK_TRAVEL_AGENT_SECRET: ${KEYCLOAK_TRAVEL_AGENT_SECRET:-travel-agent-secret}
+      KEYCLOAK_MEMORY_OPERATOR_SECRET: ${KEYCLOAK_MEMORY_OPERATOR_SECRET:-memory-operator-secret}
     ports: ["8080:8080"]
     volumes:
       - ./infra/keycloak/agentic-banking-realm.json:/opt/keycloak/data/import/agentic-banking-realm.json:ro
@@ -86,6 +87,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KEYCLOAK_BANK_MCP_SECRET: ${KEYCLOAK_BANK_MCP_SECRET:-bank-mcp-secret}
       KEYCLOAK_BANK_MCP_VULNERABLE_SECRET: ${KEYCLOAK_BANK_MCP_VULNERABLE_SECRET:-bank-mcp-vulnerable-secret}
+      KEYCLOAK_MEMORY_OPERATOR_SECRET: ${KEYCLOAK_MEMORY_OPERATOR_SECRET:-memory-operator-secret}
     depends_on:
       keycloak: {condition: service_started}
 
@@ -105,7 +107,7 @@ services:
       postgres: {condition: service_healthy}
       keycloak-configurator: {condition: service_completed_successfully}
 
-  memory-orchestrator:
+  memory-service:
     <<: *python-service
     build:
       context: .
@@ -116,13 +118,36 @@ services:
       MONGODB_URL: mongodb://root:${MONGO_ROOT_PASSWORD:-mongo}@mongo:27017/?authSource=admin
       MONGODB_DATABASE: agent_memory
       ALLOWED_AZP: banking-agent
+      EXPECTED_AUDIENCE: memory-service
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
+    ports: ["127.0.0.1:8002:8002"]
+    depends_on:
+      mongo: {condition: service_healthy}
+      keycloak-configurator: {condition: service_completed_successfully}
+
+  memory-orchestrator:
+    <<: *python-service
+    build:
+      context: .
+      args: {APP_MODULE: services.memory_service.orchestrator}
+    environment:
+      <<: *python-env
+      PORT: 8004
+      MONGODB_URL: mongodb://root:${MONGO_ROOT_PASSWORD:-mongo}@mongo:27017/?authSource=admin
+      MONGODB_DATABASE: agent_memory
+      ALLOWED_AZP: memory-operator
       EXPECTED_AUDIENCE: memory-orchestrator
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
-    ports: ["127.0.0.1:8002:8002"]
+      MEMORY_ORCHESTRATION_INTERVAL_SECONDS: ${MEMORY_ORCHESTRATION_INTERVAL_SECONDS:-1800}
+    ports: ["127.0.0.1:8004:8004"]
     depends_on:
       mongo: {condition: service_healthy}
       keycloak-configurator: {condition: service_completed_successfully}
@@ -173,21 +198,20 @@ services:
     depends_on:
       keycloak-configurator: {condition: service_completed_successfully}
 
-  aviasales-mcp:
+  flights-mcp:
+    <<: *python-service
     build:
-      context: https://github.com/stufently/aviasales-mcp.git#bb92f4c6f28510f10a3d807983c66af7e8e8579f
+      context: .
+      args: {APP_MODULE: services.flights_mcp.app}
     environment:
-      AVIASALES_API_TOKEN: ${AVIASALES_API_TOKEN:-}
-      AVIASALES_PARTNER_ID: ${AVIASALES_PARTNER_ID:-}
-      AVIASALES_DEFAULT_CURRENCY: ${AVIASALES_DEFAULT_CURRENCY:-rub}
-      AVIASALES_MARKET: ${AVIASALES_MARKET:-ru}
-      AVIASALES_LOCALE: ${AVIASALES_LOCALE:-ru}
-      MCP_PORT: 8106
-      MCP_HOST: 0.0.0.0
-      MCP_AUTH_TOKEN: ${AVIASALES_MCP_AUTH_TOKEN:-local-aviasales-mcp}
+      PORT: 8106
+      FLIGHTS_MCP_AUTH_TOKEN: ${FLIGHTS_MCP_AUTH_TOKEN:-local-flights-mcp}
     ports: ["127.0.0.1:8106:8106"]
-    restart: unless-stopped
-    networks: [stand]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8106/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   travel-agent:
     <<: *python-service
@@ -202,8 +226,8 @@ services:
       DUCKDUCKGO_MCP_URL: http://duckduckgo-mcp:8105/mcp
       BOOKING_MCP_URL: ${BOOKING_MCP_URL:-https://mcp.hasdata.com/mcp?apis=booking}
       HASDATA_API_KEY: ${HASDATA_API_KEY:-}
-      AVIASALES_MCP_URL: http://aviasales-mcp:8106/mcp
-      AVIASALES_MCP_AUTH_TOKEN: ${AVIASALES_MCP_AUTH_TOKEN:-local-aviasales-mcp}
+      FLIGHTS_MCP_URL: http://flights-mcp:8106/mcp
+      FLIGHTS_MCP_AUTH_TOKEN: ${FLIGHTS_MCP_AUTH_TOKEN:-local-flights-mcp}
       SERVICE_CLIENT_ID: travel-agent
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_TRAVEL_AGENT_SECRET:-travel-agent-secret}
       PUBLIC_BASE_URL: http://localhost:8003
@@ -213,7 +237,9 @@ services:
       OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
     ports: ["8003:8003"]
-    depends_on: [duckduckgo-mcp, aviasales-mcp]
+    depends_on:
+      duckduckgo-mcp: {condition: service_started}
+      flights-mcp: {condition: service_healthy}
 
   banking-agent:
     <<: *python-service
@@ -228,7 +254,7 @@ services:
       ABS_MCP_URL: http://abs-mcp:8101/mcp
       ABS_MCP_VULNERABLE_URL: http://abs-mcp-vulnerable:8104/mcp
       DUCKDUCKGO_MCP_URL: http://duckduckgo-mcp:8105/mcp
-      MEMORY_URL: http://memory-orchestrator:8002
+      MEMORY_URL: http://memory-service:8002
       TRAVEL_AGENT_URL: http://travel-agent:8003
       SERVICE_CLIENT_ID: banking-agent
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_BANKING_AGENT_SECRET:-banking-agent-secret}
@@ -242,7 +268,7 @@ services:
       BANK_TIMEZONE: ${BANK_TIMEZONE:-Europe/Moscow}
     ports: ["8000:8000"]
     depends_on:
-      [abs-mcp, abs-mcp-vulnerable, duckduckgo-mcp, memory-orchestrator, travel-agent]
+      [abs-mcp, abs-mcp-vulnerable, duckduckgo-mcp, memory-service, travel-agent]
 
   ui:
     image: nginx:1.29-alpine
@@ -275,17 +301,17 @@ services:
       REDIS_PORT: 6379
       REDIS_AUTH: local-redis-secret
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
-      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-local-seaweedfs-secret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://seaweedfs:8333
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
-      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
-      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-local-seaweedfs-secret}
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
-      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://seaweedfs:8333
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_INIT_ORG_ID: 11111111-1111-4111-8111-111111111111
       LANGFUSE_INIT_ORG_NAME: Agentic Banking Lab
@@ -300,7 +326,7 @@ services:
       postgres: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
       redis: {condition: service_healthy}
-      minio: {condition: service_healthy}
+      seaweedfs: {condition: service_healthy}
     networks: [stand]
 
   langfuse-worker:
@@ -313,7 +339,7 @@ services:
       postgres: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
       redis: {condition: service_healthy}
-      minio: {condition: service_healthy}
+      seaweedfs: {condition: service_healthy}
     networks: [stand]
 
   clickhouse:
@@ -346,21 +372,22 @@ services:
       retries: 20
     networks: [stand]
 
-  minio:
-    image: cgr.dev/chainguard/minio
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.51
     restart: unless-stopped
-    entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    command: ["mini", "-dir=/data", "-ip=seaweedfs", "-ip.bind=0.0.0.0"]
     environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: miniosecret
-    ports: ["127.0.0.1:9090:9000", "127.0.0.1:9091:9001"]
-    volumes: ["minio-data:/data"]
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-langfuse}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-local-seaweedfs-secret}
+      S3_BUCKET: langfuse
+    ports: ["127.0.0.1:9090:8333"]
+    volumes: ["seaweedfs-data:/data"]
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 2s
+      test: ["CMD-SHELL", "curl -fsS --aws-sigv4 'aws:amz:us-east-1:s3' --user \"$$AWS_ACCESS_KEY_ID:$$AWS_SECRET_ACCESS_KEY\" http://localhost:8333/langfuse >/dev/null"]
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 20s
     networks: [stand]
 
 networks:
@@ -372,4 +399,4 @@ volumes:
   clickhouse-data: {}
   clickhouse-logs: {}
   redis-data: {}
-  minio-data: {}
+  seaweedfs-data: {}

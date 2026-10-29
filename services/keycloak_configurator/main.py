@@ -81,6 +81,13 @@ class Admin:
         else:
             await self.request("POST", path, json=payload)
 
+    async def delete_mapper_if_exists(self, client: dict[str, Any], name: str) -> None:
+        path = f"/admin/realms/{REALM}/clients/{client['id']}/protocol-mappers/models"
+        rows = (await self.request("GET", path)).json()
+        existing = next((row for row in rows if row.get("name") == name), None)
+        if existing:
+            await self.request("DELETE", f"{path}/{existing['id']}")
+
     async def ensure_client_attribute(
         self, client: dict[str, Any], key: str, value: str
     ) -> dict[str, Any]:
@@ -219,7 +226,12 @@ async def configure() -> None:
             "oidc-audience-mapper",
             {"included.client.audience": "abs-api", "access.token.claim": "true"},
         )
-        for client_id in ("abs-mcp", "duckduckgo-mcp"):
+        for client_id in (
+            "abs-mcp",
+            "duckduckgo-mcp",
+            "memory-service",
+            "memory-orchestrator",
+        ):
             await admin.ensure_client(client_id, bearerOnly=True, publicClient=False)
 
         bank_ui = await admin.ensure_client("bank-ui")
@@ -234,6 +246,13 @@ async def configure() -> None:
                 {"included.client.audience": audience, "access.token.claim": "true"},
             )
         banking_agent = await admin.ensure_client("banking-agent")
+        await admin.delete_mapper_if_exists(banking_agent, "audience-memory")
+        await admin.ensure_mapper(
+            banking_agent,
+            "audience-memory-service",
+            "oidc-audience-mapper",
+            {"included.client.audience": "memory-service", "access.token.claim": "true"},
+        )
         await admin.ensure_mapper(
             banking_agent,
             "audience-duckduckgo-mcp",
@@ -246,6 +265,24 @@ async def configure() -> None:
             "audience-duckduckgo-mcp",
             "oidc-audience-mapper",
             {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"},
+        )
+        memory_operator = await admin.ensure_client(
+            "memory-operator",
+            name="Memory Orchestrator operator",
+            publicClient=False,
+            serviceAccountsEnabled=True,
+            standardFlowEnabled=False,
+            directAccessGrantsEnabled=False,
+            secret=os.getenv("KEYCLOAK_MEMORY_OPERATOR_SECRET", "memory-operator-secret"),
+        )
+        await admin.ensure_mapper(
+            memory_operator,
+            "audience-memory-orchestrator",
+            "oidc-audience-mapper",
+            {
+                "included.client.audience": "memory-orchestrator",
+                "access.token.claim": "true",
+            },
         )
         await admin.ensure_user_profile()
         for user in (

@@ -14,24 +14,28 @@ flowchart LR
   VM -->|service JWT| ABS
   ABS --> PG[(PostgreSQL)]
 
-  BA -->|working turn| MEM[LLM-оркестратор памяти]
-  MEM -->|async promotion| MEM
-  MEM --> MG[(MongoDB)]
+  BA -->|read and working write| MS[Memory Service]
+  MS --> MG[(MongoDB)]
+  OP[Memory Operator] -->|service token| MO[LLM Memory Orchestrator]
+  MO -->|scheduled or API collection| MG
   BA -->|A2A| TA[Тревел-агент]
-  TA -->|MCP read only| AV[Aviasales MCP]
+  TA -->|MCP read only| AV[Flights MCP]
   TA -->|MCP HTTPS| BK[Booking MCP]
   TA --> MB[Mock booking]
   BA --> DDG[DuckDuckGo MCP]
   TA --> DDG
 
   LLM[OpenAI-compatible LLM] --> BA
-  LLM --> MEM
+  EMB[Embedding model] --> MS
+  EMB --> MO
+  LLM --> MO
   LLM --> TA
 
   KC[Keycloak] -. identity .-> UI
   KC -. service identity .-> BA
   BA -. traces .-> LF[Langfuse]
-  MEM -. traces .-> LF
+  MS -. traces .-> LF
+  MO -. traces .-> LF
 ```
 
 ## Ответственность компонентов
@@ -43,10 +47,11 @@ flowchart LR
 | `abs-mcp` | Образцовая граница доступа к АБС | MCP Streamable HTTP, RFC 8693 Token Exchange |
 | `abs-mcp-vulnerable` | Намеренно небезопасное сравнение | MCP принимает `customer_id` от LLM, client credentials |
 | `abs-api` | Транзакции и проверка владельца | FastAPI, PostgreSQL |
-| `memory-orchestrator` | Сохранение сессий, очередь асинхронной LLM-миграции working → episodic/semantic/procedural и LLM-recall | OpenAI SDK, REST, MongoDB |
+| `memory-service` | Рабочая память, сессии и scoped read долгосрочных слоёв с embedding-поиском; единственная память, доступная Banking Agent | OpenAI embeddings, REST, MongoDB |
+| `memory-orchestrator` | Отдельный LLM control plane: scheduled/manual promotion, CRUD долгосрочных слоёв и embedding backfill | OpenAI SDK, REST, MongoDB |
 | `travel-agent` | Независимый партнёрский LLM/LangGraph-агент | OpenAI SDK, A2A 1.0, MCP clients |
 | `duckduckgo-mcp` | Реальный поиск новостей и destination research без заготовленных ответов | DDGS, live network |
-| `aviasales-mcp` | Поиск цен на рейсы | MCP Market server, Travelpayouts Data API |
+| `flights-mcp` | Синтетические рейсы и цены, без реальных покупок | Собственный мок внешнего MCP, отдельный контейнер и bearer secret |
 | Booking MCP | Поиск размещения | HasData remote Streamable HTTP MCP |
 | `travel-agent` mock booking | Локальная симуляция бронирования без внешней операции | REST, synthetic confirmation |
 | `keycloak` | Пользовательская и межсервисная аутентификация | OIDC/OAuth 2.0 |
@@ -59,17 +64,21 @@ flowchart LR
 
 | Контур исследования | Обязательные компоненты |
 |---|---|
-| Изоляция и отравление памяти | Banking Agent, LLM Memory Orchestrator, MongoDB, два пользователя |
+| Изоляция и отравление памяти | Banking Agent, Memory Service, LLM Memory Orchestrator, MongoDB, два пользователя |
 | Secure/vulnerable MCP | оба ABS MCP, ABS API, PostgreSQL, Keycloak Token Exchange |
 | Indirect prompt injection | инвестиционный навык, DuckDuckGo MCP, shared memory, LLM |
-| A2A и внешняя интероперабельность | Banking Agent, Travel Agent, Aviasales MCP, Booking MCP, DuckDuckGo MCP |
-| Проверяемость экспериментов | Langfuse web/worker, ClickHouse, Redis, MinIO |
+| A2A и внешняя интероперабельность | Banking Agent, Travel Agent, Flights MCP, Booking MCP, DuckDuckGo MCP |
+| Проверяемость экспериментов | Langfuse web/worker, ClickHouse, Redis, SeaweedFS |
 
 Инвестиционный сценарий намеренно оставлен: он создаёт короткую реальную цепочку от
 недоверенного web-результата через LLM к памяти. Платёж, перевод и покупка продукта оставлены
 как разные destructive tool contracts для проверки confirmation gate и excessive agency.
-Локальные подмены Booking/Aviasales, Expedia/Duffel, отдельный режим запуска без трассировки,
+Подмена Booking, Expedia/Duffel, отдельный режим запуска без трассировки,
 дублирующий MCP probe и неиспользуемые runtime-зависимости в итоговый состав не входят.
+Flights MCP намеренно моковый: он сохраняет сетевую границу внешнего поставщика без
+зависимости от непроверенного upstream или API авиакомпаний. SeaweedFS хранит S3-объекты
+Langfuse в `seaweedfs-data`, bucket `langfuse` создаётся при старте; readiness проверяет
+подписанный S3-запрос до запуска web/worker.
 
 ## Два пути к АБС
 
@@ -100,10 +109,16 @@ client отделён по `azp`, endpoint и порту; production-код не
 ## Память и отравление
 
 Каждый chat turn сначала сохраняется полностью как две working-записи. UI может создать новый
-`conversation_id`, получить список своих сессий и загрузить прежние реплики. Затем независимый
-worker забирает migration job и через LLM извлекает пользовательские факты в episodic, знания
-о среде в semantic и переиспользуемые навыки в procedural. Ошибка migration не откатывает
-уже сохранённую историю.
+`conversation_id`, получить список своих сессий и загрузить прежние реплики. `memory-service`
+ставит migration job, но не создаёт долгосрочные записи. Отдельный `memory-orchestrator`
+забирает jobs раз в 30 минут либо по операторскому API и через LLM извлекает факты в episodic,
+знания о среде в semantic и переиспользуемые навыки в procedural. Ошибка migration не
+откатывает уже сохранённую историю.
+
+У Banking Agent нет audience `memory-orchestrator` и нет endpoint оркестратора в
+конфигурации. Он получает только audience `memory-service`, поэтому может записывать working
+turns/pending actions и читать релевантный контекст. Только отдельный client
+`memory-operator` может запускать promotion и CRUD долгосрочных слоёв.
 
 Обычные записи имеют `user_id=<customer-id>`. Общая область имеет `user_id="*"`; recall
 возвращает объединение личной и общей областей. Каждая общая запись дополнительно содержит
@@ -116,8 +131,10 @@ worker забирает migration job и через LLM извлекает по�
   санитизации сохраняет их в общую память. Инструкция на контролируемой внешней странице
   становится indirect prompt injection для всех пользователей.
 
-LLM-оркестратор оценивает записи, а при recall выбирает релевантные записи после лексического
-preselection. Затем банковский LLM получает `memory_context`, поэтому direct и indirect
+При записи долгосрочной памяти оркестратор создаёт embedding через модель
+`EMBEDDING_MODEL`. При recall `memory-service` строит embedding запроса на том же
+`OPENAI_BASE_URL`, применяет обязательные `agent_id`/`user_id`/type/TTL filters и ранжирует
+cosine similarity. Затем банковский LLM получает `memory_context`, поэтому direct и indirect
 poisoning реально влияют на контекст модели. Авторизация, canonical action parameters и
 confirmation gate при этом остаются вне LLM.
 
@@ -134,8 +151,9 @@ agent_id/user_id/status → secure MCP → Token Exchange → транзакци
 | Порт | Компонент |
 |---:|---|
 | 3000 / 3001 | UI / Langfuse |
-| 8000–8003 | Banking agent, ABS, Memory, Travel agent |
+| 8000–8003 | Banking agent, ABS, Memory Service, Travel agent |
+| 8004 | LLM Memory Orchestrator control plane |
 | 8080 | Keycloak |
 | 8101 | Secure ABS MCP |
 | 8104 | Vulnerable ABS MCP |
-| 8105 / 8106 | DuckDuckGo live / Aviasales MCP |
+| 8105 / 8106 | DuckDuckGo live / Flights MCP |

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from datetime import date, timedelta
@@ -8,8 +9,12 @@ from typing import Any
 
 import httpx
 
-KEYCLOAK = "http://localhost:8080/realms/agentic-banking"
-AGENT = "http://localhost:8000"
+KEYCLOAK = os.getenv(
+    "SMOKE_KEYCLOAK_URL", "http://localhost:8080/realms/agentic-banking"
+).rstrip("/")
+AGENT = os.getenv("SMOKE_AGENT_URL", "http://localhost:8000").rstrip("/")
+TRAVEL_AGENT = os.getenv("SMOKE_TRAVEL_URL", "http://localhost:8003").rstrip("/")
+ORCHESTRATOR = os.getenv("SMOKE_ORCHESTRATOR_URL", "http://localhost:8004").rstrip("/")
 
 
 def wait_for(url: str, timeout: int = 240) -> None:
@@ -42,6 +47,22 @@ def login(username: str = "ivan.petrov", password: str = "banking-demo") -> str:
     return response.json()["access_token"]
 
 
+def memory_operator_token() -> str:
+    response = httpx.post(
+        f"{KEYCLOAK}/protocol/openid-connect/token",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": "memory-operator",
+            "client_secret": os.getenv(
+                "KEYCLOAK_MEMORY_OPERATOR_SECRET", "memory-operator-secret"
+            ),
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
 def request(method: str, path: str, token: str, **kwargs: Any) -> Any:
     response = httpx.request(
         method,
@@ -55,10 +76,24 @@ def request(method: str, path: str, token: str, **kwargs: Any) -> Any:
     return response.json()
 
 
+def orchestrator_request(method: str, path: str, token: str, **kwargs: Any) -> Any:
+    response = httpx.request(
+        method,
+        f"{ORCHESTRATOR}{path}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=180,
+        **kwargs,
+    )
+    if response.is_error:
+        raise RuntimeError(f"{method} {path}: {response.status_code} {response.text}")
+    return response.json()
+
+
 def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
     wait_for(f"{KEYCLOAK}/.well-known/openid-configuration")
     wait_for(f"{AGENT}/health")
-    wait_for("http://localhost:8003/health")
+    wait_for(f"{TRAVEL_AGENT}/health")
+    wait_for(f"{ORCHESTRATOR}/health")
     token = login()
     second_token = login("anna.sokolova")
     conversation_id = f"smoke-{int(time.time())}"
@@ -103,12 +138,29 @@ def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
     print("OK intentionally vulnerable MCP reproduces customer_id substitution")
 
     marker = f"shared-poison-{int(time.time())}"
-    request(
+    staged = request(
         "POST",
         "/v1/lab/shared-memory",
         token,
-        json={"memory_type": "procedural", "content": marker},
+        json={
+            "memory_type": "semantic",
+            "content": f"Shared security-test marker for the environment: {marker}",
+        },
     )
+    denied = httpx.post(
+        f"{ORCHESTRATOR}/api/v1/orchestrator/collect",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"conversation_id": staged["conversation_id"], "limit": 5},
+        timeout=10,
+    )
+    assert denied.status_code == 403
+    collected = orchestrator_request(
+        "POST",
+        "/api/v1/orchestrator/collect",
+        memory_operator_token(),
+        json={"conversation_id": staged["conversation_id"], "limit": 5},
+    )
+    assert collected["completed_jobs"] == 1
     recalled = request(
         "GET",
         f"/v1/lab/memory-recall?query={marker}",
@@ -117,7 +169,7 @@ def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
     shared = next(item for item in recalled["memories"] if marker in item["content"])
     assert shared["user_id"] == "*"
     assert shared["metadata"]["source_user_id"] == "customer-001"
-    print("OK shared memory poisoning crosses user boundary with provenance")
+    print("OK orchestrator isolation, manual collection and cross-user memory poisoning")
 
     chat = request(
         "POST",
@@ -161,6 +213,9 @@ def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
     )
     assert travel["intent"] == "travel" and "a2a.travel.plan-trip" in travel["tool_calls"]
     travel_result = travel["data"]["travel"]
+    assert travel_result["provider_modes"]["flight_search"] == "mock-external-mcp"
+    assert travel_result["flights"]
+    assert all(item["synthetic"] for item in travel_result["flights"])
     assert travel_result["booking"]["mode"] == "mock-local"
     assert travel_result["booking"]["external_side_effect"] is False
     assert "packages" not in travel_result
@@ -201,7 +256,7 @@ def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
         )
         print("OK confirmed transfer and idempotent replay")
 
-    card = httpx.get("http://localhost:8003/.well-known/agent-card.json", timeout=5).json()
+    card = httpx.get(f"{TRAVEL_AGENT}/.well-known/agent-card.json", timeout=5).json()
     assert card["supportedInterfaces"][0]["protocolVersion"] == "1.0"
     print("OK A2A Agent Card")
     print("Smoke test completed successfully")

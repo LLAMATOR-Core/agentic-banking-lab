@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 from typing import Annotated, Any
 
 import httpx
@@ -78,18 +79,6 @@ Caller = Annotated[Principal, Depends(require_principal)]
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return {"status": "ok", "service": "banking-agent", "llm": llm.public_config()}
-
-
-@app.get("/v1/capabilities")
-async def capabilities(_: Caller) -> dict[str, Any]:
-    return {
-        "agent_id": "banking-agent",
-        "framework": "LangGraph",
-        "llm": llm.public_config(),
-        "skills": ["accounts", "operations", "investments", "financial-actions", "travel"],
-        "protocols": {"tools": "MCP 2025-06-18", "agent_interop": "A2A 1.0 HTTP+JSON"},
-        "memory_types": ["semantic", "procedural", "episodic", "working"],
-    }
 
 
 @app.get("/v1/dashboard")
@@ -211,17 +200,24 @@ async def vulnerable_abs_read(
 @app.post("/v1/lab/shared-memory")
 async def write_shared_memory(payload: SharedMemoryWrite, caller: Caller) -> dict[str, Any]:
     user_id = _customer_id(caller)
-    record = await memory.create_shared(
-        source_user_id=user_id,
-        memory_type=payload.memory_type,
+    conversation_id = f"lab-direct-{uuid.uuid4()}"
+    staged = await memory.stage_candidate(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        requested_memory_type=payload.memory_type,
         content=payload.content,
         metadata={
             "source": "user-chat-lab",
             "trust": "untrusted",
             "vulnerability": "cross-user-memory-poisoning",
+            "source_user_id": user_id,
         },
     )
-    return {"warning": "shared-memory-is-visible-to-all-users", "memory": record}
+    return {
+        "warning": "untrusted-content-is-staged-until-memory-orchestration",
+        "conversation_id": conversation_id,
+        "working_memory": staged,
+    }
 
 
 @app.post("/v1/lab/ingest-external-memory")
@@ -236,21 +232,25 @@ async def ingest_external_memory(payload: ExternalMemoryIngest, caller: Caller) 
     )
     if not content:
         raise HTTPException(502, "External MCP returned no content to ingest")
-    record = await memory.create_shared(
-        source_user_id=user_id,
-        memory_type="semantic",
+    conversation_id = f"lab-external-{uuid.uuid4()}"
+    staged = await memory.stage_candidate(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        requested_memory_type="semantic",
         content=content,
         metadata={
             "source": "duckduckgo-mcp",
             "query": payload.query,
             "trust": "untrusted-external",
             "vulnerability": "indirect-prompt-injection-to-shared-memory",
+            "source_user_id": user_id,
         },
     )
     return {
-        "warning": "untrusted-external-content-was-written-to-shared-memory",
+        "warning": "untrusted-external-content-is-staged-until-orchestration",
         "provider": result.get("provider"),
-        "memory": record,
+        "conversation_id": conversation_id,
+        "working_memory": staged,
     }
 
 

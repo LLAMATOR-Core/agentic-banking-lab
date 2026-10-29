@@ -13,11 +13,10 @@ from services.common.llm import raise_upstream_llm_error
 
 class MemoryClient:
     def __init__(self, tokens: ServiceTokenProvider) -> None:
-        self.base_url = os.getenv("MEMORY_URL", "http://memory-orchestrator:8002")
+        self.base_url = os.getenv("MEMORY_URL", "http://memory-service:8002")
         self.tokens = tokens
         try:
-            # Memory reads/writes invoke the memory orchestrator's required LLM.
-            # Keep the HTTP boundary above the OpenAI SDK timeout (45s by default).
+            # Recall invokes the configured embedding provider.
             self.timeout = float(os.getenv("MEMORY_HTTP_TIMEOUT_SECONDS", "60"))
         except ValueError:
             self.timeout = 60.0
@@ -30,53 +29,52 @@ class MemoryClient:
             "user_id": user_id,
             "query": query,
             "conversation_id": conversation_id,
-            "limit": limit,
+            "limit_per_layer": max(1, min(limit, 20)),
         }
-        result = await self._request("POST", "/v1/recall", json=payload)
+        result = await self._request("POST", "/api/v1/context", json=payload)
         return result["memories"]
 
-    async def create(
+    async def create_action(
         self,
         *,
         user_id: str,
-        memory_type: str,
-        content: str,
-        conversation_id: str | None,
-        metadata: dict[str, Any],
-        expires_at: datetime | None = None,
+        conversation_id: str,
+        action_type: str,
+        parameters: dict[str, Any],
+        expires_at: datetime,
     ) -> dict[str, Any]:
         return await self._request(
             "POST",
-            "/v1/memories",
+            "/api/v1/working/actions",
             json={
                 "agent_id": "banking-agent",
                 "user_id": user_id,
-                "memory_type": memory_type,
-                "content": content,
                 "conversation_id": conversation_id,
-                "metadata": metadata,
-                "expires_at": expires_at.isoformat() if expires_at else None,
+                "action_type": action_type,
+                "parameters": parameters,
+                "expires_at": expires_at.isoformat(),
             },
         )
 
-    async def create_shared(
+    async def stage_candidate(
         self,
         *,
-        source_user_id: str,
-        memory_type: str,
+        user_id: str,
+        conversation_id: str,
+        requested_memory_type: str,
         content: str,
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
-        """Write the intentionally shared lab namespace read by every user."""
-        return await self.create(
-            user_id="*",
-            memory_type=memory_type,
-            content=content,
-            conversation_id=None,
-            metadata={
-                **metadata,
-                "scope": "shared",
-                "source_user_id": source_user_id,
+        return await self._request(
+            "POST",
+            "/api/v1/working/candidates",
+            json={
+                "agent_id": "banking-agent",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "requested_memory_type": requested_memory_type,
+                "content": content,
+                "metadata": metadata,
             },
         )
 
@@ -92,7 +90,7 @@ class MemoryClient:
     ) -> dict[str, Any]:
         return await self._request(
             "POST",
-            "/v1/turns",
+            "/api/v1/working/turns",
             json={
                 "agent_id": "banking-agent",
                 "user_id": user_id,
@@ -107,8 +105,8 @@ class MemoryClient:
     async def conversations(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
         result = await self._request(
             "GET",
-            "/v1/conversations",
-            params={"agent_id": "banking-agent", "user_id": user_id, "limit": limit},
+            f"/api/v1/working/conversations/banking-agent/{user_id}",
+            params={"limit": limit},
         )
         return result["conversations"]
 
@@ -117,17 +115,28 @@ class MemoryClient:
     ) -> list[dict[str, Any]]:
         result = await self._request(
             "GET",
-            f"/v1/conversations/{conversation_id}/messages",
-            params={"agent_id": "banking-agent", "user_id": user_id},
+            f"/api/v1/working/banking-agent/{user_id}/{conversation_id}",
         )
         return result["messages"]
 
-    async def get(self, memory_id: str) -> dict[str, Any]:
-        return await self._request("GET", f"/v1/memories/{memory_id}")
-
-    async def patch_metadata(self, memory_id: str, metadata: dict[str, Any]) -> dict[str, Any]:
+    async def get_action(self, memory_id: str, user_id: str) -> dict[str, Any]:
         return await self._request(
-            "PATCH", f"/v1/memories/{memory_id}", json={"metadata": metadata}
+            "GET",
+            f"/api/v1/working/actions/{memory_id}",
+            params={"agent_id": "banking-agent", "user_id": user_id},
+        )
+
+    async def patch_action(
+        self, memory_id: str, user_id: str, metadata: dict[str, Any]
+    ) -> dict[str, Any]:
+        return await self._request(
+            "PATCH",
+            f"/api/v1/working/actions/{memory_id}",
+            json={
+                "agent_id": "banking-agent",
+                "user_id": user_id,
+                "metadata": metadata,
+            },
         )
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
