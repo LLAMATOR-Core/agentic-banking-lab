@@ -1,124 +1,126 @@
 # MCP и A2A
 
-## MCP
+Учебные задания по развитию и проверке этих контрактов описаны
+в [примерном плане курса](COURSE_PLAN.md).
 
-Собственные MCP-серверы предоставляют stateless Streamable HTTP endpoint `POST /mcp`,
-protocol version `2025-06-18`, и методы `initialize`, `tools/list`, `tools/call`. Flights MCP
-также stateless; клиент выполняет handshake и отправляет `notifications/initialized`.
-Для stateful внешних серверов клиент сохраняет `Mcp-Session-Id`. Клиент понимает JSON и SSE ответы,
-а также `structuredContent` и JSON внутри text content.
+## MCP-серверы
 
-Пример discovery (нужен user access token):
+Собственные серверы предоставляют `POST /mcp` с версией протокола `2025-06-18`.
+Поддерживаются `initialize`, `notifications/initialized`, `tools/list` и `tools/call`.
+Клиент выполняет инициализацию, понимает JSON и SSE, сохраняет `Mcp-Session-Id`, если
+сервер выдал идентификатор сессии. Результат берётся из `structuredContent` либо
+декодируется из текстового содержимого.
+
+| Адрес | Назначение | Авторизация |
+|---|---|---|
+| `:8101/mcp` | Защищённый доступ к АБС | Пользовательский JWT |
+| `:8104/mcp` | Уязвимый доступ к АБС с параметром `customer_id` | Пользовательский JWT |
+| `:8105/mcp` | Банковский DuckDuckGo | JWT с `aud=duckduckgo-mcp` |
+| `travel-duckduckgo-mcp:8105/mcp` | Поиск travel-системы, только во внутренней сети | JWT с `aud=travel-duckduckgo-mcp` |
+| `:8106/mcp` | `search_flights` мокового провайдера | Отдельный bearer-токен |
+| `https://mcp.tutu.ru/mcp` | Поиск авиабилетов через `search_avia` | Не требуется |
+
+Получение списка инструментов защищённого MCP после инициализации:
 
 ```bash
-curl -s http://localhost:8101/mcp \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "MCP-Protocol-Version: 2025-06-18" \
-  -H "Content-Type: application/json" \
+curl -fsS http://localhost:8101/mcp \
+  -H "Authorization: Bearer $IVAN_TOKEN" \
+  -H 'MCP-Protocol-Version: 2025-06-18' \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}'
 ```
 
-Вызов read-only tool:
+Получение пользовательского токена описано в [руководстве](RUNBOOK.md#токены-для-лабораторных-запросов).
+Оба MCP АБС имеют одинаковые имена банковских инструментов, но разные требования
+к идентификатору клиента. Защищённый MCP не принимает `customer_id` в аргументах;
+уязвимый требует его. Адреса и режим выбираются в `.env`, см. [настройки](CONFIGURATION.md).
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "2",
-  "method": "tools/call",
-  "params": {"name": "get_customer_accounts", "arguments": {}}
-}
-```
+## Авиабилеты Туту
 
-В secure server на `8101` в аргументах нет `customer_id`; это обязательное свойство
-security contract. Сервер на `8104` — намеренный антипример: его schema требует
-`customer_id`, а запрос к АБС выполняется с client credentials без Token Exchange.
+Travel Agent вызывает только `search_avia`. Он передаёт `origin`, `destination`,
+`departure_date`, `return_date`, `adults`, `page_size=10`, `view=compact`.
+Перед вызовом проверяется наличие этих полей в опубликованной схеме инструмента.
+Банковские JWT, профиль и токен мока Туту не передаются.
 
-Состав MCP:
+Ответ содержит `offers`. Сохраняются цена, оба направления в `legs[].segments[]`,
+аэропорты, номера рейсов, условия тарифов и `search_results_url`. Цена уже относится
+ко всей группе пассажиров; она не умножается на число взрослых или направлений.
+Параметра валюты у `search_avia` нет: сохраняется валюта ответа, без пересчёта.
 
-| Endpoint | Режим | Инструменты |
-|---|---|---|
-| `:8101/mcp` | secure, Keycloak Token Exchange | банковские read/write tools |
-| `:8104/mcp` | намеренно уязвимый | те же tools + обязательный `customer_id` |
-| `:8105/mcp` | live DuckDuckGo для Banking и Travel Agent | `news_search`, `text_search` |
-| `:8106/mcp` | мок внешнего Flights MCP, отдельный bearer secret | `search_flights`, только синтетические предложения |
-| `https://mcp.hasdata.com/mcp?apis=booking` | remote Booking MCP | search + property details |
+`meta.has_more`, `total_matched_exact` и сведения о распознанных городах передаются
+модели и возвращаются в `flight_search_meta`. Неполная страница результатов не означает,
+что других рейсов нет. `checkout_ref` и хеши оформления заказа не используются.
+Инструменты оформления заказа и регистрации пассажиров не вызываются.
+
+## Мок авиабилетов
+
+`flights-mcp` запускается вместе с остальными сервисами на порту 8106. В нём один
+инструмент `search_flights`, который проверяет IATA-коды, даты, число взрослых и
+возвращает один вымышленный рейс. Для обычного поиска через него задайте
+`FLIGHTS_PROVIDER=mock` в `.env`.
+
+Файл `FLIGHTS_MOCK_NOTE` из каталога `infra/flights-mcp/` передаётся в контейнер как
+`FLIGHTS_MCP_NOTE_FILE`. Мок читает до 4000 символов при каждом запросе и возвращает
+их в `provider_note`. `clean.txt` содержит нейтральный текст, `provider-note.txt` —
+ложную инструкцию для опыта. Каждый результат отмечен `synthetic=true`,
+`mode=mock-external-mcp`, `content_trust=untrusted-external`.
+
+Мок использует отдельный `FLIGHTS_MCP_AUTH_TOKEN`, в том числе при отключённой для
+тестов проверке JWT остальных сервисов. Он не обращается к авиакомпаниям или MongoDB.
+Банковский `POST /v1/lab/ingest-flight-memory` запрашивает исходный ответ мока
+у Travel Agent по A2A, затем передаёт его в API памяти. Прямого MCP-соединения
+между банковской системой и моком нет. Это отдельный лабораторный запрос; обычный поиск Туту его не вызывает.
+
+## Сведения о направлениях
+
+Сведения о направлениях получает `duckduckgo-mcp.text_search`, новости — `news_search`.
+Ошибка источника не заменяется заранее подготовленным ответом.
 
 ## A2A 1.0
 
-Travel agent публикует card на `/.well-known/agent-card.json`. Preferred interface — `HTTP+JSON`, protocol `1.0`, endpoint base `/a2a/v1`. Реализована обязательная для демо синхронная операция `POST /a2a/v1/message:send` с media type `application/a2a+json` и header `A2A-Version: 1.0`.
+Между системами доступен шлюз `travel-api :8003`. Он пропускает только A2A,
+карточку агента и `/health`; прямые REST-методы Travel Agent не публикуются.
 
-Это LLM-агент: перед MCP-вызовами модель формирует structured tool plan, а после получения
-результатов выбирает и ранжирует ссылки. Оба LLM-шага используют официальный `openai` SDK и
-`OPENAI_BASE_URL`. При недоступности модели A2A endpoint возвращает явный
-`503/llm_unavailable`; банковский агент сохраняет эту ошибку до UI.
+Travel Agent публикует описание на `GET /.well-known/agent-card.json` и принимает
+`POST /a2a/v1/message:send` с заголовками `Content-Type: application/a2a+json` и
+`A2A-Version: 1.0`. Используется привязка `HTTP+JSON`.
 
-DataPart запроса:
+Сообщение содержит `role=ROLE_USER`, `messageId`, `contextId` и JSON-часть с `TripRequest`.
+В нём передаются идентификатор клиента для корреляции, вид запроса, маршрут, даты,
+число взрослых, бюджет, валюта и интересы. Банковский профиль, счета и история туда
+не входят. Идентификатор клиента исключается из входных данных LLM тревел-агента.
+
+Для `request_type=destination_info` тревел-агент ищет только сведения о месте.
+Для `trip_search` нужны маршрут и даты. При нехватке обязательных данных банковская LLM
+формулирует уточняющий вопрос. Если модель оставила вопрос пустым или данные пришли
+из неполной формы, банк составляет вопрос по списку недостающих параметров.
+До их получения A2A-запрос не отправляется; вопрос сохраняется в истории диалога.
+Travel Agent планирует инструменты через LLM, затем
+ранжирует полученные результаты, не добавляя несуществующие `result_id`.
+Поиск отелей не поддерживается. Для совместимости с существующими A2A-клиентами
+ответ сохраняет `accommodations: []` и `provider_modes.hotel_search="not-supported"`.
+Эти поля не означают, что поиск отелей был выполнен и ничего не нашёл.
+
+Для локального бронирования отправьте по A2A JSON-часть:
 
 ```json
-{
-  "message": {
-    "role": "ROLE_USER",
-    "messageId": "uuid",
-    "contextId": "conversation-uuid",
-    "parts": [{
-      "mediaType": "application/json",
-      "data": {
-        "user_id": "customer-001",
-        "origin": "MOW",
-        "destination": "Стамбул",
-        "destination_airport": "IST",
-        "departure_date": "2026-11-01",
-        "return_date": "2026-11-08",
-        "adults": 1,
-        "budget": 150000,
-        "currency": "RUB",
-        "interests": ["culture", "food"]
-      }
-    }]
-  }
-}
+{"request_type":"mock_booking","booking":{"flight_result_id":"flight-1"}}
 ```
 
-Ответ — direct agent Message с DataPart. Долгие Tasks, streaming, push notifications и card signature не реализованы; это явные задания расширения стенда.
+Ответ содержит идентификатор `mock-*` и `external_side_effect=false`.
+Лабораторное чтение мока использует `request_type=lab_flight_source` с полем `search`
+по схеме `MockFlightSearch`. Оба запроса проверяются как A2A-запросы банковской системы.
+Внутренний REST-метод `/v1/bookings/mock` остаётся только внутри travel-системы;
+через шлюз он недоступен. Планирование поездки не создаёт бронь автоматически.
 
-## Реальные MCP источников и mock booking
+## Контекст между вызовами
 
-Для рейсов Compose собирает собственный `services/flights_mcp` и запускает отдельный
-контейнер `flights-mcp` на `:8106/mcp`. Это мок внешнего поставщика: отдельный bearer secret
-`FLIGHTS_MCP_AUTH_TOKEN`, без Keycloak, банковской identity и внешнего API. Даже
-`AUTH_DISABLED=true` не отключает его проверку bearer. Travel Agent вызывает `tools/list`,
-затем `search_flights` с `origin`, `destination` (IATA), `departure_date`, необязательным
-`return_date`, `adults`, `currency`, `max_results` (1–10). Даты и маршрут валидируются;
-лишние поля, включая `customer_id`, запрещены. Одинаковый запрос возвращает одинаковые
-синтетические предложения. `price` — условная сумма за всех пассажиров и все участки,
-без привязки к рыночным тарифам. Каждый результат содержит `synthetic=true`,
-`mode=mock-external-mcp`, `content_trust=untrusted-external`, `booking_supported=false`.
-Никаких продаж, запросов авиакомпаниям или сетевых fallback нет. Ошибка MCP остаётся
-в `search_errors`, мок внутри Travel Agent вместо сетевого ответа не подставляется.
+Банковский агент извлекает параметры поездки с учётом истории и воспоминаний.
+Тревел-агент получает параметры и текущее `user_query` до 1000 символов; полная
+история банка ему не передаётся. Его граф хранит запрос и результаты инструментов
+только на время текущего выполнения, без сохранения состояния между вызовами.
 
-Для отелей Travel Agent напрямую подключён к remote MCP
-`https://mcp.hasdata.com/mcp?apis=booking` с `x-api-key`. Используется read-only tool
-`hasdata_booking_search_getBookingSearchResults`; нужен `HASDATA_API_KEY`. Ответ HasData
-разворачивается из MCP content, ограничивается по размеру и маркируется как
-`untrusted-external` до передачи LLM.
-
-`POST /v1/bookings/mock` реализован самим Travel Agent:
-он создаёт идентификатор `mock-*`, возвращает `external_side_effect=false` и ничего не
-отправляет поставщику. Планирование поездки мок-бронирование автоматически не вызывает.
-Запрос о месте без дат и просьбы искать инвентарь получает `request_type=destination_info`.
-Travel Agent вызывает `duckduckgo-mcp.text_search`, передаёт найденные snippets LLM и сам
-формирует рекомендации. Списков достопримечательностей и destination-specific шаблонов в коде
-нет. Для явного поиска билетов/отеля LLM извлекает IATA-коды, даты и остальные параметры; если
-обязательных данных нет, модель формулирует уточняющий вопрос вместо подстановки маршрута.
-
-DuckDuckGo вынесен из процесса агента в отдельный MCP. `mode=live` и
-`content_trust=untrusted-external` сохраняются в structured result. Ошибка сети не
-подменяется synthetic news: инвестиционные продукты/портфель продолжают работать, а
-`news=[]` показывает деградацию.
-
-Между Travel Agent и Flights MCP используется только отдельный bearer secret.
-API-токены авиакомпаний не нужны. `HASDATA_API_KEY`
-необходим Travel Agent как credential удалённого MCP; redaction и запрет trace body для
-headers обязательны.
-
-Стабильность контракта позволяет студентам реализовать другой A2A-клиент или MCP-провайдер без доступа к коду соседнего агента.
+`contextId` связывает сообщения и трассы, но сейчас не загружает сессию из хранилища.
+Тревел-агент не подключён к API памяти. Сохранение состояния поездки, продолжение
+диалога и ограниченный обмен воспоминаниями выделены в задания курса; это ещё
+не реализованные свойства стенда.

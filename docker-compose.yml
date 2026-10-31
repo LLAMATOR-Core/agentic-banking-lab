@@ -5,16 +5,39 @@ x-python-service: &python-service
     context: .
     dockerfile: Dockerfile
   restart: unless-stopped
-  networks: [stand]
   environment: &python-env
     AUTH_DISABLED: ${AUTH_DISABLED:-false}
     KEYCLOAK_ISSUER: http://localhost:8080/realms/agentic-banking
     KEYCLOAK_INTERNAL_URL: http://keycloak:8080
     KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/agentic-banking/protocol/openid-connect/certs
-    LANGFUSE_BASE_URL: http://langfuse-web:3000
-    LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local-agentic-banking}
-    LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local-agentic-banking}
     LANGFUSE_TRACING_ENVIRONMENT: local
+
+x-banking-env: &banking-env
+  <<: *python-env
+  AGENT_SYSTEM_ID: banking
+  LANGFUSE_PROJECT_NAME: Banking
+  LANGFUSE_PROJECT_ID: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+  LANGFUSE_BASE_URL: http://langfuse-web:3000
+  LANGFUSE_PUBLIC_KEY: ${BANKING_LANGFUSE_PUBLIC_KEY:-pk-lf-banking}
+  LANGFUSE_SECRET_KEY: ${BANKING_LANGFUSE_SECRET_KEY:-sk-lf-local-banking}
+
+x-travel-env: &travel-env
+  <<: *python-env
+  AGENT_SYSTEM_ID: travel
+  LANGFUSE_PROJECT_NAME: Travel
+  LANGFUSE_PROJECT_ID: 33333333-3333-4333-8333-333333333333
+  LANGFUSE_BASE_URL: http://langfuse-travel:3000
+  LANGFUSE_PUBLIC_KEY: ${TRAVEL_LANGFUSE_PUBLIC_KEY:-pk-lf-travel}
+  LANGFUSE_SECRET_KEY: ${TRAVEL_LANGFUSE_SECRET_KEY:-sk-lf-local-travel}
+
+x-memory-env: &memory-env
+  <<: *python-env
+  AGENT_SYSTEM_ID: memory
+  LANGFUSE_PROJECT_NAME: Persistent Memory
+  LANGFUSE_PROJECT_ID: 44444444-4444-4444-8444-444444444444
+  LANGFUSE_BASE_URL: http://langfuse-memory:3000
+  LANGFUSE_PUBLIC_KEY: ${MEMORY_LANGFUSE_PUBLIC_KEY:-pk-lf-memory}
+  LANGFUSE_SECRET_KEY: ${MEMORY_LANGFUSE_SECRET_KEY:-sk-lf-local-memory}
 
 services:
   postgres:
@@ -33,7 +56,9 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
-    networks: [stand]
+
+    sysctls: {net.ipv4.ip_forward: "0"}
+    networks: [bank-storage, platform-storage]
 
   mongo:
     image: mongo:8.0
@@ -48,7 +73,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    networks: [stand]
+
+    networks: [memory-storage]
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.4
@@ -68,19 +94,21 @@ services:
       KEYCLOAK_BANK_MCP_VULNERABLE_SECRET: ${KEYCLOAK_BANK_MCP_VULNERABLE_SECRET:-bank-mcp-vulnerable-secret}
       KEYCLOAK_TRAVEL_AGENT_SECRET: ${KEYCLOAK_TRAVEL_AGENT_SECRET:-travel-agent-secret}
       KEYCLOAK_MEMORY_OPERATOR_SECRET: ${KEYCLOAK_MEMORY_OPERATOR_SECRET:-memory-operator-secret}
-    ports: ["8080:8080"]
+    ports: ["127.0.0.1:8080:8080"]
     volumes:
       - ./infra/keycloak/agentic-banking-realm.json:/opt/keycloak/data/import/agentic-banking-realm.json:ro
     depends_on:
       postgres: {condition: service_healthy}
-    networks: [stand]
+
+    sysctls: {net.ipv4.ip_forward: "0"}
+    networks: [banking, travel, memory, platform-storage]
 
   keycloak-configurator:
     <<: *python-service
     restart: "no"
     build:
       context: .
-      args: {APP_MODULE: services.keycloak_configurator.main}
+      args: {APP_MODULE: services.keycloak_configurator.main, SERVICE_PACKAGE: keycloak_configurator}
     command: ["python", "-m", "services.keycloak_configurator.main"]
     environment:
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
@@ -91,74 +119,89 @@ services:
     depends_on:
       keycloak: {condition: service_started}
 
+    networks: [banking]
+
   abs-api:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.abs_service.app}
+      args: {APP_MODULE: services.abs_service.app, SERVICE_PACKAGE: abs_service}
     environment:
-      <<: *python-env
+      <<: *banking-env
       PORT: 8001
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/banking
       ALLOWED_AZP: bank-mcp,bank-mcp-vulnerable
       EXPECTED_AUDIENCE: abs-api
     ports: ["127.0.0.1:8001:8001"]
     depends_on:
+      langfuse-web: {condition: service_healthy}
       postgres: {condition: service_healthy}
       keycloak-configurator: {condition: service_completed_successfully}
+
+    networks: [banking, bank-storage]
 
   memory-service:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.memory_service.app}
+      args: {APP_MODULE: services.memory_service.app, SERVICE_PACKAGE: memory_service}
     environment:
-      <<: *python-env
+      <<: *memory-env
       PORT: 8002
       MONGODB_URL: mongodb://root:${MONGO_ROOT_PASSWORD:-mongo}@mongo:27017/?authSource=admin
       MONGODB_DATABASE: agent_memory
       ALLOWED_AZP: banking-agent
       EXPECTED_AUDIENCE: memory-service
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_API_KEY: ${MEMORY_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
+      OPENAI_BASE_URL: ${MEMORY_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.openai.com/v1}}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
-    ports: ["127.0.0.1:8002:8002"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['PORT']+'/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     depends_on:
+      langfuse-memory: {condition: service_healthy}
       mongo: {condition: service_healthy}
       keycloak-configurator: {condition: service_completed_successfully}
+
+    networks: [memory, memory-storage]
 
   memory-orchestrator:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.memory_service.orchestrator}
+      args: {APP_MODULE: services.memory_service.orchestrator, SERVICE_PACKAGE: memory_service}
     environment:
-      <<: *python-env
+      <<: *memory-env
       PORT: 8004
       MONGODB_URL: mongodb://root:${MONGO_ROOT_PASSWORD:-mongo}@mongo:27017/?authSource=admin
       MONGODB_DATABASE: agent_memory
       ALLOWED_AZP: memory-operator
       EXPECTED_AUDIENCE: memory-orchestrator
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_API_KEY: ${MEMORY_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
+      OPENAI_BASE_URL: ${MEMORY_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.openai.com/v1}}
+      OPENAI_MODEL: ${MEMORY_OPENAI_MODEL:-${OPENAI_MODEL:-gpt-5-mini}}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
       MEMORY_ORCHESTRATION_INTERVAL_SECONDS: ${MEMORY_ORCHESTRATION_INTERVAL_SECONDS:-1800}
     ports: ["127.0.0.1:8004:8004"]
     depends_on:
+      langfuse-memory: {condition: service_healthy}
       mongo: {condition: service_healthy}
       keycloak-configurator: {condition: service_completed_successfully}
+
+    networks: [memory, memory-storage]
 
   abs-mcp:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.abs_mcp.app}
+      args: {APP_MODULE: services.abs_mcp.app, SERVICE_PACKAGE: abs_mcp}
     environment:
-      <<: *python-env
+      <<: *banking-env
       PORT: 8101
       ALLOWED_AZP: bank-ui
       EXPECTED_AUDIENCE: abs-mcp
@@ -166,15 +209,19 @@ services:
       SERVICE_CLIENT_ID: bank-mcp
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_BANK_MCP_SECRET:-bank-mcp-secret}
     ports: ["127.0.0.1:8101:8101"]
-    depends_on: [abs-api]
+    depends_on:
+      langfuse-web: {condition: service_healthy}
+      abs-api: {condition: service_started}
+
+    networks: [banking]
 
   abs-mcp-vulnerable:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.abs_mcp_vulnerable.app}
+      args: {APP_MODULE: services.abs_mcp_vulnerable.app, SERVICE_PACKAGE: abs_mcp_vulnerable}
     environment:
-      <<: *python-env
+      <<: *banking-env
       PORT: 8104
       ALLOWED_AZP: bank-ui
       EXPECTED_AUDIENCE: bank-mcp-vulnerable
@@ -182,30 +229,41 @@ services:
       SERVICE_CLIENT_ID: bank-mcp-vulnerable
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_BANK_MCP_VULNERABLE_SECRET:-bank-mcp-vulnerable-secret}
     ports: ["127.0.0.1:8104:8104"]
-    depends_on: [abs-api]
+    depends_on:
+      langfuse-web: {condition: service_healthy}
+      abs-api: {condition: service_started}
+
+    networks: [banking]
 
   duckduckgo-mcp:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.duckduckgo_mcp.app}
+      args: {APP_MODULE: services.duckduckgo_mcp.app, SERVICE_PACKAGE: duckduckgo_mcp}
     environment:
-      <<: *python-env
+      <<: *banking-env
       PORT: 8105
-      ALLOWED_AZP: banking-agent,travel-agent
+      ALLOWED_AZP: banking-agent
       EXPECTED_AUDIENCE: duckduckgo-mcp
     ports: ["127.0.0.1:8105:8105"]
     depends_on:
+      langfuse-web: {condition: service_healthy}
       keycloak-configurator: {condition: service_completed_successfully}
+
+    networks: [banking]
 
   flights-mcp:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.flights_mcp.app}
+      args: {APP_MODULE: services.flights_mcp.app, SERVICE_PACKAGE: flights_mcp}
     environment:
+      <<: *travel-env
       PORT: 8106
       FLIGHTS_MCP_AUTH_TOKEN: ${FLIGHTS_MCP_AUTH_TOKEN:-local-flights-mcp}
+      FLIGHTS_MCP_NOTE_FILE: /data/${FLIGHTS_MOCK_NOTE:-clean.txt}
+    volumes:
+      - ./infra/flights-mcp:/data:ro
     ports: ["127.0.0.1:8106:8106"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8106/health')"]
@@ -213,77 +271,95 @@ services:
       timeout: 3s
       retries: 20
 
+    networks: [travel]
+
   travel-agent:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.travel_agent.app}
+      args: {APP_MODULE: services.travel_agent.app, SERVICE_PACKAGE: travel_agent}
     environment:
-      <<: *python-env
+      <<: *travel-env
       PORT: 8003
       ALLOWED_AZP: banking-agent
       EXPECTED_AUDIENCE: travel-agent
-      DUCKDUCKGO_MCP_URL: http://duckduckgo-mcp:8105/mcp
-      BOOKING_MCP_URL: ${BOOKING_MCP_URL:-https://mcp.hasdata.com/mcp?apis=booking}
-      HASDATA_API_KEY: ${HASDATA_API_KEY:-}
-      FLIGHTS_MCP_URL: http://flights-mcp:8106/mcp
+      DUCKDUCKGO_MCP_URL: http://travel-duckduckgo-mcp:8105/mcp
+      FLIGHTS_PROVIDER: ${FLIGHTS_PROVIDER:-tutu}
+      TUTU_MCP_URL: ${TUTU_MCP_URL:-https://mcp.tutu.ru/mcp}
+      MOCK_FLIGHTS_MCP_URL: ${MOCK_FLIGHTS_MCP_URL:-http://flights-mcp:8106/mcp}
       FLIGHTS_MCP_AUTH_TOKEN: ${FLIGHTS_MCP_AUTH_TOKEN:-local-flights-mcp}
       SERVICE_CLIENT_ID: travel-agent
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_TRAVEL_AGENT_SECRET:-travel-agent-secret}
       PUBLIC_BASE_URL: http://localhost:8003
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_API_KEY: ${TRAVEL_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
+      OPENAI_BASE_URL: ${TRAVEL_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.openai.com/v1}}
+      OPENAI_MODEL: ${TRAVEL_OPENAI_MODEL:-${OPENAI_MODEL:-gpt-5-mini}}
       OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
-    ports: ["8003:8003"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['PORT']+'/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     depends_on:
-      duckduckgo-mcp: {condition: service_started}
+      langfuse-travel: {condition: service_healthy}
+      travel-duckduckgo-mcp: {condition: service_started}
       flights-mcp: {condition: service_healthy}
+
+    networks: [travel]
 
   banking-agent:
     <<: *python-service
     build:
       context: .
-      args: {APP_MODULE: services.banking_agent.app}
+      args: {APP_MODULE: services.banking_agent.app, SERVICE_PACKAGE: banking_agent}
     environment:
-      <<: *python-env
+      <<: *banking-env
       PORT: 8000
       ALLOWED_AZP: bank-ui
       EXPECTED_AUDIENCE: banking-agent
-      ABS_MCP_URL: http://abs-mcp:8101/mcp
-      ABS_MCP_VULNERABLE_URL: http://abs-mcp-vulnerable:8104/mcp
+      ABS_MCP_URL: ${ABS_MCP_URL:-http://abs-mcp:8101/mcp}
+      ABS_MCP_MODE: ${ABS_MCP_MODE:-secure}
+      ABS_MCP_VULNERABLE_URL: ${ABS_MCP_VULNERABLE_URL:-http://abs-mcp-vulnerable:8104/mcp}
       DUCKDUCKGO_MCP_URL: http://duckduckgo-mcp:8105/mcp
-      MEMORY_URL: http://memory-service:8002
-      TRAVEL_AGENT_URL: http://travel-agent:8003
+      MEMORY_URL: ${MEMORY_URL:-http://memory-api:8002}
+      TRAVEL_AGENT_URL: ${TRAVEL_AGENT_URL:-http://travel-api:8003}
       SERVICE_CLIENT_ID: banking-agent
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_BANKING_AGENT_SECRET:-banking-agent-secret}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_API_KEY: ${BANKING_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
+      OPENAI_BASE_URL: ${BANKING_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.openai.com/v1}}
+      OPENAI_MODEL: ${BANKING_OPENAI_MODEL:-${OPENAI_MODEL:-gpt-5-mini}}
       OPENAI_JSON_MODE: ${OPENAI_JSON_MODE:-true}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-45}
       MEMORY_HTTP_TIMEOUT_SECONDS: ${MEMORY_HTTP_TIMEOUT_SECONDS:-60}
       TRAVEL_HTTP_TIMEOUT_SECONDS: ${TRAVEL_HTTP_TIMEOUT_SECONDS:-180}
       BANK_TIMEZONE: ${BANK_TIMEZONE:-Europe/Moscow}
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]
     depends_on:
-      [abs-mcp, abs-mcp-vulnerable, duckduckgo-mcp, memory-service, travel-agent]
+      abs-mcp: {condition: service_started}
+      abs-mcp-vulnerable: {condition: service_started}
+      duckduckgo-mcp: {condition: service_started}
+      memory-api: {condition: service_started}
+      travel-api: {condition: service_started}
+      langfuse-web: {condition: service_healthy}
+
+    networks: [banking]
 
   ui:
     image: nginx:1.29-alpine
     restart: unless-stopped
-    ports: ["3000:80"]
+    ports: ["127.0.0.1:3000:80"]
     volumes:
       - ./ui:/usr/share/nginx/html:ro
       - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on: [banking-agent, keycloak]
-    networks: [stand]
+
+    networks: [banking]
 
   langfuse-web:
     image: docker.langfuse.com/langfuse/langfuse:4
     restart: unless-stopped
-    ports: ["3001:3000"]
+    ports: ["127.0.0.1:3001:3000"]
     environment: &langfuse-env
       HOSTNAME: 0.0.0.0
       NEXTAUTH_URL: http://localhost:3001
@@ -315,19 +391,27 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_INIT_ORG_ID: 11111111-1111-4111-8111-111111111111
       LANGFUSE_INIT_ORG_NAME: Agentic Banking Lab
-      LANGFUSE_INIT_PROJECT_ID: 22222222-2222-4222-8222-222222222222
-      LANGFUSE_INIT_PROJECT_NAME: Banking Agents
-      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local-agentic-banking}
-      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local-agentic-banking}
+      LANGFUSE_INIT_PROJECT_ID: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+      LANGFUSE_INIT_PROJECT_NAME: Banking
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${BANKING_LANGFUSE_PUBLIC_KEY:-pk-lf-banking}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${BANKING_LANGFUSE_SECRET_KEY:-sk-lf-local-banking}
       LANGFUSE_INIT_USER_EMAIL: researcher@example.test
       LANGFUSE_INIT_USER_NAME: Researcher
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-langfuse}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/public/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
     depends_on:
       postgres: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
       redis: {condition: service_healthy}
       seaweedfs: {condition: service_healthy}
-    networks: [stand]
+
+    sysctls: {net.ipv4.ip_forward: "0"}
+    networks: [banking, platform-storage]
 
   langfuse-worker:
     image: docker.langfuse.com/langfuse/langfuse-worker:4
@@ -335,12 +419,19 @@ services:
     environment:
       <<: *langfuse-env
       NEXTAUTH_URL: http://langfuse-web:3000
+      LANGFUSE_INIT_ORG_ID: ""
+      LANGFUSE_INIT_PROJECT_ID: ""
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ""
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ""
+      LANGFUSE_INIT_USER_EMAIL: ""
+      LANGFUSE_INIT_USER_PASSWORD: ""
     depends_on:
       postgres: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
       redis: {condition: service_healthy}
       seaweedfs: {condition: service_healthy}
-    networks: [stand]
+
+    networks: [platform-storage]
 
   clickhouse:
     image: clickhouse/clickhouse-server:25.12
@@ -358,7 +449,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    networks: [stand]
+
+    networks: [platform-storage]
 
   redis:
     image: redis:7-alpine
@@ -370,7 +462,8 @@ services:
       interval: 3s
       timeout: 5s
       retries: 20
-    networks: [stand]
+
+    networks: [platform-storage]
 
   seaweedfs:
     image: chrislusf/seaweedfs:4.51
@@ -388,10 +481,95 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
-    networks: [stand]
+    networks: [platform-storage]
+
+  travel-duckduckgo-mcp:
+    <<: *python-service
+    build:
+      context: .
+      args: {APP_MODULE: services.duckduckgo_mcp.app, SERVICE_PACKAGE: duckduckgo_mcp}
+    environment:
+      <<: *travel-env
+      PORT: 8105
+      ALLOWED_AZP: travel-agent
+      EXPECTED_AUDIENCE: travel-duckduckgo-mcp
+      MCP_SERVER_NAME: travel-duckduckgo-mcp
+    depends_on:
+      langfuse-travel: {condition: service_healthy}
+      keycloak-configurator: {condition: service_completed_successfully}
+
+    networks: [travel]
+
+  langfuse-travel:
+    image: docker.langfuse.com/langfuse/langfuse:4
+    restart: unless-stopped
+    environment:
+      <<: *langfuse-env
+      LANGFUSE_INIT_PROJECT_ID: 33333333-3333-4333-8333-333333333333
+      LANGFUSE_INIT_PROJECT_NAME: Travel
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${TRAVEL_LANGFUSE_PUBLIC_KEY:-pk-lf-travel}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${TRAVEL_LANGFUSE_SECRET_KEY:-sk-lf-local-travel}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/public/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    depends_on:
+      langfuse-web: {condition: service_healthy}
+    sysctls: {net.ipv4.ip_forward: "0"}
+    networks: [travel, platform-storage]
+
+  langfuse-memory:
+    image: docker.langfuse.com/langfuse/langfuse:4
+    restart: unless-stopped
+    environment:
+      <<: *langfuse-env
+      LANGFUSE_INIT_PROJECT_ID: 44444444-4444-4444-8444-444444444444
+      LANGFUSE_INIT_PROJECT_NAME: Persistent Memory
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${MEMORY_LANGFUSE_PUBLIC_KEY:-pk-lf-memory}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${MEMORY_LANGFUSE_SECRET_KEY:-sk-lf-local-memory}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/public/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    depends_on:
+      langfuse-travel: {condition: service_healthy}
+    sysctls: {net.ipv4.ip_forward: "0"}
+    networks: [memory, platform-storage]
+
+  travel-api:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    volumes:
+      - ./infra/boundaries/travel-api.conf:/etc/nginx/conf.d/default.conf:ro
+    ports: ["127.0.0.1:8003:8003"]
+    depends_on:
+      travel-agent: {condition: service_healthy}
+    sysctls: {net.ipv4.ip_forward: "0"}
+    networks: [banking, travel]
+
+  memory-api:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    volumes:
+      - ./infra/boundaries/memory-api.conf:/etc/nginx/conf.d/default.conf:ro
+    ports: ["127.0.0.1:8002:8002"]
+    depends_on:
+      memory-service: {condition: service_healthy}
+    sysctls: {net.ipv4.ip_forward: "0"}
+    networks: [banking, memory]
+
 
 networks:
-  stand: {}
+  banking: {}
+  travel: {}
+  memory: {}
+  bank-storage: {internal: true}
+  memory-storage: {internal: true}
+  platform-storage: {internal: true}
 
 volumes:
   postgres-data: {}

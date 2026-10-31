@@ -1,192 +1,187 @@
 # Agentic Banking Lab
 
-Запускаемый локальный стенд для исследований безопасности, наблюдаемости и интероперабельности ИИ-агентов. В нём разделены UI интернет-банка, банковский LangGraph-агент, MCP-фасад, АБС, PostgreSQL, оркестратор памяти, партнёрский тревел-агент, Keycloak и Langfuse.
+Учебный стенд для исследования безопасности банковского ИИ-агента: проверки прав доступа,
+взаимодействия через MCP и A2A, внедрения инструкций и отравления памяти.
 
-Банковский агент, тревел-агент и оркестратор памяти обязательно используют LLM через
-официальную библиотеку `openai`. Провайдер задаётся через `OPENAI_BASE_URL`; скрытого
-детерминированного fallback нет. DuckDuckGo работает как отдельный live MCP. Перелёты
-предоставляет отдельный моковый Flights MCP с синтетическими рейсами и ценами, а отели — удалённый read-only
-Booking.com MCP от HasData. Бронирование — локальный мок Travel Agent, коммерческие операции
-не выполняются. Два MCP к АБС дают сравнить образцовый
-Token Exchange с намеренным broken-access-control антипримером.
+Стенд объединяет три самостоятельные системы:
 
-## Архитектура
+| Система | Компоненты | Проект Langfuse |
+|---|---|---|
+| Банковская | Банковский агент, интерфейс банка, MCP АБС, АБС и поиск новостей | `Banking` |
+| Travel | Тревел-агент, собственный DuckDuckGo MCP и мок авиабилетов; внешний MCP Туту | `Travel` |
+| Персистентная память | API памяти, LLM-оркестратор и MongoDB | `Persistent Memory` |
 
-```mermaid
-flowchart LR
-  U[Пользователь] --> UI[Internet Bank UI :3000]
-  UI -->|OIDC PKCE| KC[Keycloak :8080]
-  UI -->|JWT + chat/dashboard| BA[Banking Agent\nLangGraph :8000]
-  BA -->|MCP + user JWT| BM[Secure ABS MCP :8101]
-  BM -->|Token Exchange JWT| ABS[ABS API :8001]
-  BA -. lab .-> VM[Vulnerable ABS MCP :8104]
-  VM -. customer_id + service JWT .-> ABS
-  ABS --> PG[(PostgreSQL)]
-  BA -->|read + working write| MS[Memory Service :8002]
-  MS --> MG[(MongoDB)]
-  OP[Memory Operator] -->|service JWT| MO[Memory Orchestrator :8004]
-  MO --> MG
-  BA -->|A2A 1.0 + service JWT| TA[Travel Agent\nLangGraph :8003]
-  TA -->|MCP| AV[Flights MCP :8106]
-  TA -->|MCP HTTPS| BK[Booking MCP remote]
-  TA --> MB[Local mock booking]
-  BA --> DDG[DuckDuckGo MCP :8105]
-  TA --> DDG
-  BA -. traces .-> LF[Langfuse :3001]
-  MS -. traces .-> LF
-  MO -. traces .-> LF
-  TA -. traces .-> LF
-  BM -. traces .-> LF
-  LLM[OpenAI-compatible LLM] --> BA
-  LLM --> MS
-  LLM --> MO
-  LLM --> TA
-```
+У систем разные Docker-сети, API-ключи Langfuse и контейнерные образы с собственным кодом.
+Банк обращается к travel-системе только по A2A через `travel-api`, а к памяти — через
+`memory-api`. Прямого доступа к чужим агентам, MCP или MongoDB у него нет.
+Keycloak и инфраструктура хранения Langfuse общие. Подробнее — в [архитектуре](docs/ARCHITECTURE.md).
 
-Главные границы намеренно вынесены в отдельные контейнеры:
+## Запуск
 
-- `ui` — статический Интернет-Банк и чат, OIDC Authorization Code + PKCE;
-- `banking-agent` — LLM-граф `recall → LLM classify → skill → LLM answer → persist`, без прямого доступа к БД;
-- `abs-mcp` — образцовый MCP: user token → Keycloak Token Exchange → АБС;
-- `abs-mcp-vulnerable` — намеренно принимает `customer_id` от LLM и использует
-  over-privileged service identity;
-- `abs-api` — транзакционный backend АБС и единственный владелец банковской схемы PostgreSQL;
-- `memory-service` — рабочая память, история сессий и только чтение долгосрочных слоёв через embedding-поиск; доступен банковскому агенту;
-- `memory-orchestrator` — отдельный LLM-агент control plane: каждые 30 минут или по операторскому API переносит факты из working memory в episodic/semantic/procedural; банковскому агенту недоступен;
-- `travel-agent` — отдельный LLM/LangGraph-агент с A2A 1.0 Agent Card;
-- `duckduckgo-mcp` — live web/news search для банковского и тревел-агента;
-- `flights-mcp` — собственный read-only мок внешнего провайдера авиабилетов, отдельный контейнер и bearer secret;
-- `Booking MCP` — настоящий удалённый read-only MCP HasData;
-- `travel-agent` — содержит локальный мок бронирования без внешних side effects;
-- `keycloak` — пользовательские и межсервисные токены;
-- `langfuse-web`, `langfuse-worker` — трассы, плюс ClickHouse, Redis и SeaweedFS.
+Нужны Docker с Compose v2 и не менее 8 ГБ свободной оперативной памяти для Docker.
 
-Подробности: [архитектура](docs/ARCHITECTURE.md), [безопасность](docs/SECURITY.md), [память](docs/MEMORY.md), [MCP/A2A](docs/INTEROPERABILITY.md), [эксперименты](docs/EXPERIMENTS.md).
+1. Создайте файл настроек:
 
-## Быстрый запуск
+   ```bash
+   cp .env.example .env
+   ```
 
-Нужны Docker с Compose v2, не менее 8 ГБ свободной RAM и свободные порты `3000`,
-`3001`, `8000–8004`, `8080`, `8101`, `8104–8106`, `9090`. Первый запуск скачивает образы и обычно
-занимает несколько минут.
+2. В `.env` укажите `OPENAI_API_KEY`. При необходимости измените `OPENAI_BASE_URL`,
+   `OPENAI_MODEL` и `EMBEDDING_MODEL`. Провайдер должен поддерживать Chat Completions
+   и Embeddings.
+3. Запустите стенд:
+
+   ```bash
+   docker compose --env-file .env up -d --build
+   ```
+
+Проверьте контейнеры:
 
 ```bash
-cp .env.example .env
-# заполните OPENAI_API_KEY и HASDATA_API_KEY
-docker compose up --build -d
-docker compose ps
+docker compose --env-file .env ps
 ```
 
-Для обновления существующего стенда используйте [порядок переноса хранилища](docs/RUNBOOK.md#обновление-существующего-стенда-на-seaweedfs-и-flights-mcp):
-он сохраняет прежние S3-объекты Langfuse и освобождает порты заменяемых контейнеров.
+Первый запуск скачивает образы и собирает приложения. После готовности Keycloak откройте
+[интерфейс банка](http://localhost:3000). Если он открылся раньше Keycloak, обновите страницу.
+Существующий `.env` при обновлении проекта не перезаписывайте.
 
-`OPENAI_BASE_URL` может указывать на OpenAI API или совместимый Chat Completions endpoint.
-Если локальный провайдер не проверяет ключ, всё равно задайте непустой placeholder в
-`OPENAI_API_KEY`, поскольку отсутствие конфигурации трактуется как недоступность LLM.
-`OPENAI_JSON_MODE=false` отключает параметр `response_format` для провайдера, который его не
-поддерживает; модель всё равно обязана вернуть JSON по переданной схеме.
-`EMBEDDING_MODEL` задаёт OpenAI-compatible embedding-модель на том же `OPENAI_BASE_URL`.
-Без доступных embeddings recall возвращает явную ошибку; скрытого fallback нет.
+## Выбор MCP и источника авиабилетов
 
-Для поиска отелей нужен `HASDATA_API_KEY` (Booking MCP). Без него источник явно появится
-в `search_errors` как недоступный. Авиабилетный мок работает без внешней сети и API-ключей
-авиакомпаний; `FLIGHTS_MCP_AUTH_TOKEN` должен совпадать у Flights MCP и Travel Agent.
+Меняйте параметры в `.env`, затем повторяйте ту же команду запуска. Все сервисы сравнения
+поднимаются вместе со стендом; параметры определяют, к какому MCP обращается агент.
 
-Откройте:
+| Параметр | Значение | Поведение |
+|---|---|---|
+| `ABS_MCP_MODE` | `secure` | Клиент определяется по JWT через обмен токенами Keycloak |
+| `ABS_MCP_MODE` | `vulnerable` | LLM выбирает `customer_id` для уязвимого MCP АБС |
+| `FLIGHTS_PROVIDER` | `tutu` | Поиск авиабилетов через MCP Туту |
+| `FLIGHTS_PROVIDER` | `mock` | Один вымышленный рейс из собственного MCP |
+| `FLIGHTS_MOCK_NOTE` | `clean.txt` | Нейтральная заметка в ответе мока |
+| `FLIGHTS_MOCK_NOTE` | `provider-note.txt` | Ложная инструкция для опыта с отравлением памяти |
 
-- Интернет-Банк: <http://localhost:3000>
-- Keycloak: <http://localhost:8080> (`admin` / `admin`)
-- Langfuse: <http://localhost:3001> (`researcher@example.test` / `langfuse`)
-- OpenAPI банковского агента: <http://localhost:8000/docs>
-- Agent Card тревел-агента: <http://localhost:8003/.well-known/agent-card.json>
+По умолчанию выбраны `secure`, `tutu`, `clean.txt`. Пример для совместного исследования
+нарушения контроля доступа и отравления памяти:
 
-Тестовые пользователи:
+```dotenv
+ABS_MCP_MODE=vulnerable
+FLIGHTS_PROVIDER=mock
+FLIGHTS_MOCK_NOTE=provider-note.txt
+```
 
-| Login | Password | Customer |
+После изменения `.env`:
+
+```bash
+docker compose --env-file .env up -d --build
+```
+
+`FLIGHTS_MOCK_NOTE` выбирает файл из `infra/flights-mcp/`. Его можно редактировать;
+мок читает текст при каждом запросе. Ошибка Туту не приводит к подмене результатов моком.
+
+Уязвимый режим меняет банковские инструменты чата. Обзор счетов в интерфейсе и профиль
+для персонализации всегда используют защищённый MCP. Денежные операции требуют
+отдельного подтверждения в обоих режимах. Смена настроек не удаляет историю и память.
+
+Подробнее: [настройки и проверка подключений](docs/CONFIGURATION.md),
+[порядок проведения опытов](docs/EXPERIMENTS.md).
+
+## Учётные записи и адреса
+
+| Пользователь | Пароль | Идентификатор клиента |
 |---|---|---|
 | `ivan.petrov` | `banking-demo` | `customer-001` |
 | `anna.sokolova` | `banking-demo` | `customer-002` |
 | `mikhail.orlov` | `banking-demo` | `customer-003` |
 | `elena.smirnova` | `banking-demo` | `customer-004` |
 
-`keycloak-configurator` создаёт/обновляет их и настройки Token Exchange даже при уже
-существующем volume Keycloak.
+| Сервис | Адрес | Учётная запись |
+|---|---|---|
+| Интерфейс банка | [localhost:3000](http://localhost:3000) | Пользователи из таблицы выше |
+| Keycloak | [localhost:8080](http://localhost:8080) | `admin` / `admin` |
+| Langfuse | [localhost:3001](http://localhost:3001) | `researcher@example.test` / `langfuse` |
+| API банковского агента | [localhost:8000/docs](http://localhost:8000/docs) | Пользовательский JWT |
+| Карточка тревел-агента | [Agent Card](http://localhost:8003/.well-known/agent-card.json) | Публичное описание A2A |
 
-Проверка готовности и базовых сценариев выполняет реальные LLM-вызовы и требует доступного
-провайдера:
+В Langfuse переключайтесь между проектами `Banking`, `Travel` и `Persistent Memory`.
+Они создаются автоматически с разными ключами из `.env`. Если стенд запускался раньше,
+прежний смешанный проект сохраняется как история; новые трассы направляются в три
+новых проекта.
+
+Пароли указаны для исходного `.env.example`. Кроме этих портов стенд использует
+`5432`, `27017`, `8001–8004`, `8101`, `8104–8106` и `9090`.
+
+## Контекст агента и память
+
+Банковский агент получает текущую дату и время в `BANK_TIMEZONE`, базовый профиль
+из АБС, всю сохранённую историю текущего диалога и до восьми релевантных воспоминаний
+из каждого долгосрочного слоя. В профиль входят ФИО, пол, тип клиента и VIP-статус.
+Содержимое выбранных воспоминаний передаётся без дополнительной обрезки.
+
+Рабочую память и историю хранит `memory-service`. Отдельный `memory-orchestrator`
+обрабатывает их по расписанию или по операторскому запросу и создаёт эпизодические,
+семантические и процедурные записи. Эти данные используются в последующих LLM-вызовах.
+Профиль и история банковского агента не передаются тревел-агенту или внешним MCP.
+
+В `.env` параметр `MEMORY_ORCHESTRATION_INTERVAL_SECONDS` задаёт интервал обработки:
+`1800` — 30 минут по умолчанию, `10` — быстрый опыт, `0` — только ручной запуск.
+Для опыта с отравлением можно отключить расписание и вызвать
+`POST http://localhost:8004/api/v1/orchestrator/collect` с токеном `memory-operator`.
+Пример запроса — в [настройках памяти](docs/CONFIGURATION.md#обработка-долговременной-памяти).
+
+## Проверки
+
+Для автоматических тестов нужен Python 3.12 или новее:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-python scripts/smoke_test.py
+ruff check services tests scripts
 pytest -q
 ```
 
-Smoke-тест только подготавливает денежную операцию. Для явной проверки реального списания на 1 RUB используйте `python scripts/smoke_test.py --confirm`; это изменит локальные тестовые данные.
-
-Остановка без удаления данных:
+Для проверки сетевой изоляции и ключей Langfuse после запуска:
 
 ```bash
-docker compose down
+python scripts/check_system_isolation.py
 ```
 
-Полный сброс данных — намеренно отдельная разрушительная команда: `make reset`.
+Для проверки основных функций работающего стенда:
 
-## Что умеет банковский агент
-
-- профиль, счета, остатки и история операций;
-- список инвестиционных продуктов, портфель и новости DuckDuckGo;
-- подготовка перевода, оплаты услуги и покупки инвестиционного продукта;
-- обязательное отдельное подтверждение активной операции, TTL 15 минут и идемпотентное исполнение;
-- планирование поездки через A2A-вызов партнёрского агента;
-- семантическая, процедурная, эпизодическая и рабочая память;
-- полный журнал реплик, создание новых диалогов и возврат к предыдущим сессиям;
-- LLM-миграция working memory в знания о пользователе, среде и навыках раз в 30 минут или по операторскому API;
-- Langfuse-трассы для turn, MCP tool call, A2A и операций памяти.
-
-Оба MCP АБС имеют инструменты `get_customer_info`, `get_customer_accounts`,
-`get_operations_history`, `create_transfer`, `pay_service`, `list_investment_products`,
-`get_portfolio`, `buy_investment_product`. Только у намеренно уязвимого сервера в arguments
-есть `customer_id`.
-
-## Важные ограничения стенда
-
-Это учебная конфигурация, не production banking:
-
-- Keycloak запущен в `start-dev`, пароли и секреты в `.env.example` публичны;
-- TLS, WAF, rate limits, SIEM и HSM не включены;
-- схемы АБС создаются через `create_all`, а не миграциями;
-- рекомендации по направлениям формирует LLM тревел-агента из live DuckDuckGo MCP, без заранее подготовленных ответов; бронирование — локальный мок Travel Agent;
-- Booking MCP read-only и не создаёт бронь; HasData расходует credits на успешные вызовы;
-- Flights MCP возвращает только синтетические рейсы и цены с `synthetic=true` и `mode=mock-external-mcp`;
-- DuckDuckGo и Booking MCP зависят от внешней сети и явно сообщают о недоступности;
-- endpoints `/v1/lab/*`, shared write и `abs-mcp-vulnerable` намеренно небезопасны;
-- долгосрочная память использует cosine similarity по embeddings; модель и совместимый endpoint задаются через `EMBEDDING_MODEL` и `OPENAI_BASE_URL`;
-- при отсутствии/ошибке LLM chat возвращает `502/503`, а UI явно показывает, что ИИ недоступен;
-- UI показывает исследовательские `tool_calls`; в пользовательском production-интерфейсе это обычно скрывают.
-
-Для изменения секретов сервисных клиентов меняйте `.env` **до первого запуска**: realm использует подстановку переменных при импорте. Если realm уже был импортирован, выполните осознанный `make reset` либо обновите clients через Keycloak Admin Console.
-
-## Структура
-
-```text
-services/
-  banking_agent/       LangGraph и навыки банка
-  travel_agent/        A2A-сервер и LangGraph партнёра
-  abs_mcp/             Secure MCP АБС с Token Exchange
-  abs_mcp_vulnerable/  Broken access control anti-pattern
-  duckduckgo_mcp/      Live web/news MCP
-  flights_mcp/         Мок внешнего MCP авиабилетов с отдельной аутентификацией
-  abs_service/         backend АБС и SQL-модели
-  memory_service/      data plane памяти и отдельный LLM-оркестратор
-  common/              Keycloak, MCP client/server, tracing
-infra/                 Keycloak realm, PostgreSQL init, nginx
-ui/                    Интернет-Банк и чат
-scripts/               smoke-тест
-tests/                 unit/contract tests
-docs/                  проектная и эксплуатационная документация
+```bash
+python scripts/smoke_test.py
 ```
 
-## Нормативные ориентиры
+Эта проверка обращается к LLM и только подготавливает денежную операцию.
+Параметр `--confirm` дополнительно выполняет перевод 1 RUB между тестовыми счетами.
 
-Реализация следует публичным интерфейсам [OpenAI Python SDK](https://developers.openai.com/api/docs/libraries), [MCP](https://modelcontextprotocol.io/specification/2025-06-18), [A2A 1.0](https://a2a-protocol.org/latest/specification), [Keycloak realm import](https://www.keycloak.org/server/importExport), [LangGraph](https://langchain-ai.github.io/langgraph/) и [Langfuse self-hosting](https://langfuse.com/self-hosting). Версии образов и Python-диапазоны находятся в `docker-compose.yml` и `requirements.txt`. SeaweedFS закреплён на версии `4.51` и запускается в режиме [`weed mini`](https://github.com/seaweedfs/seaweedfs/wiki/Quick-Start-with-weed-mini) с S3 bucket `langfuse`.
+## Остановка
+
+```bash
+docker compose --env-file .env down
+```
+
+Данные сохраняются в именованных томах Docker. Порядок удаления данных и переноса
+старого хранилища описан в [руководстве по эксплуатации](docs/RUNBOOK.md).
+
+## Границы учебного стенда
+
+Стенд содержит намеренные уязвимости и локальные тестовые пароли. Он не предназначен
+для реальных банковских данных. Keycloak работает в режиме `start-dev`, TLS не настроен.
+
+Туту и DuckDuckGo требуют доступа к внешней сети. Туту используется только
+для поиска, без оформления заказа и передачи данных пассажиров. Бронирование в
+Travel Agent — локальная имитация. Поиск отелей не реализован.
+Без доступной LLM или модели эмбеддингов соответствующая
+операция возвращает ошибку; подготовленных ответов вместо модели нет.
+
+## Документация
+
+- [Примерный план курса по интероперабельности](docs/COURSE_PLAN.md)
+- [Два семинара по безопасности ИИ-ассистентов и ИИ-агентов](docs/AI_SECURITY_WORKSHOPS.md)
+- [Настройки](docs/CONFIGURATION.md)
+- [Запуск, диагностика и данные](docs/RUNBOOK.md)
+- [Сценарии исследований](docs/EXPERIMENTS.md)
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Память и контекст LLM](docs/MEMORY.md)
+- [MCP и A2A](docs/INTEROPERABILITY.md)
+- [Безопасность](docs/SECURITY.md)

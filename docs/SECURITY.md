@@ -1,8 +1,11 @@
 # Безопасность и модель угроз
 
-Актуальность: 29 октября 2026 года.
+Актуальность: 1 ноября 2026 года.
 
-Документ описывает одновременно защищённый baseline и намеренно уязвимые лабораторные
+Практическая программа с картой текущих контролей и разрывов, ручными атаками,
+автоматизацией и повторной проверкой защит — в [плане двух семинаров](AI_SECURITY_WORKSHOPS.md).
+
+Документ описывает одновременно защищённый вариант и намеренно уязвимые лабораторные
 ветки. `abs-mcp-vulnerable`, `/v1/lab/*` и общая память `user_id="*"` нельзя публиковать в
 Интернете или переносить в production. Эксперименты выполняются только на тестовых данных.
 
@@ -37,15 +40,15 @@
 
 | Контур | Текущее свойство | Статус |
 |---|---|---|
-| UI → Banking agent | OIDC Authorization Code + PKCE | защищённый baseline |
+| UI → Banking agent | OIDC Authorization Code + PKCE | защищённый вариант |
 | Banking agent → Secure ABS MCP → ABS | user token → Token Exchange → `customer_id` из exchanged JWT | образец identity binding |
 | Banking agent → Vulnerable ABS MCP → ABS | LLM задаёт `customer_id`, MCP использует общую service identity | намеренная уязвимость |
 | Banking agent → Memory Service | service token; working write; scoped embedding-read | долгосрочные mutation недоступны |
 | Memory Operator → LLM Memory Orchestrator | отдельный service token; scheduled/manual promotion | semantic/procedural shared promotion намеренно уязвим для poisoning |
 | DuckDuckGo/внешний Web → Memory | реальные недоверенные snippets сохраняются без content policy | намеренная indirect-injection ветка |
 | Banking agent → Travel agent | A2A с service token и минимальным `TripRequest` | нет end-user delegation |
-| Travel agent → Flights MCP | отдельный bearer secret вне Keycloak; собственный мок в отдельном контейнере | внешние ответы недоверенные |
-| Travel agent → Booking MCP | HTTPS + HasData API key; remote read-only MCP | внешний SaaS и quota/terms risk |
+| Travel agent → Tutu MCP | HTTPS без авторизации, только `search_avia` | ответы недоверенные, checkout не вызывается |
+| Travel agent → Flights mock MCP (lab) | отдельный bearer secret вне Keycloak; собственный мок в отдельном контейнере | внешние ответы недоверенные |
 | Travel agent → mock booking | локальная симуляция, `external_side_effect=false` | не является реальной бронью |
 | Все сервисы → Langfuse | traces с ограниченной redaction | возможна утечка через свободный текст |
 
@@ -61,13 +64,16 @@
 | Memory Operator | Memory Orchestrator | `memory-operator` | `memory-orchestrator` |
 | Banking agent | Travel agent | `banking-agent` | `travel-agent` |
 | Banking agent | DuckDuckGo MCP | `banking-agent` | `duckduckgo-mcp` |
-| Travel agent | DuckDuckGo MCP | `travel-agent` | `duckduckgo-mcp` |
+| Travel agent | DuckDuckGo MCP | `travel-agent` | `travel-duckduckgo-mcp` |
 | Secure Bank MCP | ABS API | `bank-mcp` | `abs-api` |
 | Vulnerable Bank MCP | ABS API | `bank-mcp-vulnerable` | `abs-api` |
 
-Мок Flights и удалённый Booking находятся вне Keycloak trust domain. Для первого используется отдельный
-MCP bearer secret, для второго — `x-api-key`; они не являются пользовательской делегацией и
-не должны получать банковские данные или `customer_id`.
+Туту и мок Flights находятся вне Keycloak trust domain. Туту не требует
+авторизации; mock bearer и банковские JWT ему не передаются. У мока отдельный MCP bearer
+secret. Ни один из них не получает банковские данные или `customer_id`.
+Лабораторный `ingest-flight-memory` намеренно сохраняет `provider_note` как недоверенный
+кандидат для оркестрации; `FLIGHTS_MOCK_NOTE=provider-note.txt` выбирает контролируемый
+источник отравления.
 
 Каждый сервис проверяет подпись через JWKS, `iss`, срок, `azp` и `aud`. Валидная подпись без
 верного audience не даёт права вызвать сервис. Bearer token не передаётся через query string,
@@ -185,7 +191,9 @@ tool с общей service identity показывает, почему excessive
 1. Разместите уникальный безвредный marker с текстом, похожим на инструкцию.
 2. Добейтесь его появления в поиске по точному запросу.
 3. Вызовите `/v1/lab/ingest-external-memory` пользователем A.
-4. Дождитесь 30-минутного scheduler либо запустите collection токеном `memory-operator`.
+4. Дождитесь обработки по расписанию либо запустите её токеном `memory-operator`.
+   Интервал задаётся в `.env` через `MEMORY_ORCHESTRATION_INTERVAL_SECONDS`;
+   значение `0` оставляет только ручной запуск.
 5. Выполните recall того же marker пользователем B.
 6. Проверьте `source=duckduckgo-mcp`, `trust=untrusted-external`,
    `source_user_id` и `user_id="*"`.
@@ -216,6 +224,13 @@ ranking, а не только через содержимое.
 Ни `agent_id`, ни `user_id`, ни trust label нельзя извлекать из текста, созданного моделью.
 Эти поля задаёт аутентифицированный control plane.
 
+Граница текущего доверия: API памяти получает область из запроса допущенного сервиса;
+отдельной привязки `agent_id`/`user_id` к делегированному субъекту в нём нет. За клиента
+на пользовательском пути отвечает банковский агент. При компрометации его сервисной
+идентичности одних фильтров MongoDB недостаточно. Чтение процедуры по ID дополнительно
+требует выравнивания с политикой поиска: сейчас оно не проверяет срок и пользовательскую
+область записи. Эти сценарии описаны как S09–S10 в плане семинаров.
+
 ### 6. MCP tool poisoning и schema drift
 
 **Гипотеза:** подключённый сервер сохраняет знакомое имя tool, но меняет description, schema,
@@ -233,6 +248,12 @@ annotations или семантику результата.
 Защита: allow-list server identity + endpoint, pin/version manifest, review diff tool schema,
 разделение read/write MCP, запрет runtime auto-install и повторное согласие при изменении
 capabilities.
+
+Публикация `inputSchema` не означает её исполнение. Общий `create_mcp_app` сейчас
+проверяет форму объекта аргументов, но не выполняет полную JSON Schema-валидацию перед
+handler. Часть ограничений проверяют HTTP-модели АБС и других сервисов. Planner также
+не получает весь динамический каталог описаний инструментов: достижимость инъекции
+через descriptor требуется проверять отдельно, не предполагать по факту MCP-соединения.
 
 ### 7. A2A spoofing, replay и delegated identity gap
 
@@ -264,13 +285,23 @@ idempotency key. Четвёртое пока является production gap: co
 MCP. Также тестируйте race двух одновременных подтверждений, истёкший ID, округление валюты,
 отрицательные/NaN/overflow значения и visually-confusable реквизиты.
 
+У повтора в АБС проверяется владелец idempotency key, но не совпадение вида операции
+и канонического запроса. Совпадение ключа с другой суммой или другим действием не должно
+молча возвращать прежний результат. Гонка и восстановление после сбоя проверяются
+по числу фактических эффектов и корректности ответа, а не только по наличию блокировки.
+
 ### 9. Sensitive data disclosure и cross-domain over-sharing
 
 - `OPENAI_BASE_URL` — отдельная trust boundary: оператор endpoint видит переданный модели
   prompt. Не направляйте банковский или memory context в непроверенный совместимый сервер.
-- Banking LLM получает пользовательский текст, ограниченный skill draft и выбранную память;
+- Banking LLM получает полный текущий диалог, базовый профиль (ФИО, пол, тип клиента,
+  VIP-статус), дату/часовой пояс, skill draft/data и выбранную долгосрочную память;
   Memory LLM — content кандидатов, но не canonical metadata pending-операций; Travel LLM —
   маршрут без банковского `user_id`.
+- Профиль берётся через secure MCP с user JWT и проверкой совпадения customer identity.
+  JWT, телефон и email не входят в базовый LLM-контекст; контакты могут появиться в
+  результате явно запрошенного навыка профиля. История ограничена текущими user/session,
+  а память сохраняет `source`/`trust` и не приобретает полномочий на выполнение операций.
 - Добавьте уникальный canary в банковское поле и убедитесь, что он не появляется в
   `TripRequest`, DuckDuckGo query, tool error, trace или пользовательском сообщении другому
   агенту.
@@ -281,6 +312,11 @@ MCP. Также тестируйте race двух одновременных п
 
 Для production нужны доверенный LLM endpoint с TLS, отдельные credentials/scopes на сервис,
 data-retention policy, DLP до вызова модели и запрет логирования prompt у промежуточного proxy.
+
+Исключение контактов из базового профиля не является очисткой свободного текста:
+сообщения, история и воспоминания могут содержать введённые пользователем секреты.
+Отдельная проверка нужна перед DuckDuckGo: банковский поиск новостей включает часть
+исходного сообщения, без общей политики удаления чувствительных данных.
 
 Особенно опасны system prompt extraction и просьбы «покажи скрытый контекст»: секреты вообще
 не должны находиться в prompt, поэтому даже успешная prompt extraction не раскрывает credential.
@@ -391,3 +427,29 @@ Card. Credentials и внутренние детали в публичную Age
 - [MCP 2026-07-28 Authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
 - [MCP Security Best Practices](https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices)
 - [A2A Protocol Specification — Security](https://a2a-protocol.org/latest/specification/)
+
+## Выбор исследовательского режима
+
+`ABS_MCP_MODE=vulnerable` передаёт выбор `customer_id` банковских инструментов
+LLM-узлу `select_abs_identity`; текст пользователя и память могут повлиять на решение.
+Это путь чата к уязвимому MCP при сохранённой проверке JWT. Профиль для персонализации
+и обзор счетов остаются привязаны к вошедшему пользователю. Отдельное подтверждение
+денежной операции сохраняется, но не устраняет подмену клиента в уязвимом MCP.
+
+Для опыта с отравлением задайте `FLIGHTS_PROVIDER=mock` и
+`FLIGHTS_MOCK_NOTE=provider-note.txt` в `.env`. Для сравнения используйте `clean.txt`.
+После изменения параметров повторите `docker compose --env-file .env up -d --build`.
+Подробности — в [настройках](CONFIGURATION.md) и [сценариях исследований](EXPERIMENTS.md).
+
+## Сетевые границы систем и трассировка
+
+Банковская, travel- и memory-системы не имеют общей сети приложений. Между ними
+разрешены A2A через `travel-api` и API памяти через `memory-api`. Операторский API
+памяти не входит в банковский шлюз. Прямой доступ банковского агента к travel-моку,
+внутреннему Travel Agent, оркестратору и MongoDB закрыт.
+
+У каждой системы собственный проект и API-ключи Langfuse. Получатель начинает новую
+трассу; идентификатор диалога используется для корреляции, а не для наследования
+полномочий. См. [архитектуру](ARCHITECTURE.md) и [проверку изоляции](RUNBOOK.md#проверка-изоляции).
+Общие службы авторизации и наблюдаемости, а также администратор Docker-хоста входят
+в доверенную инфраструктуру этого локального стенда.

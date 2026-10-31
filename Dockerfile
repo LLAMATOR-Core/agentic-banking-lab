@@ -7,7 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY services ./services
+ARG SERVICE_PACKAGE
+COPY services/common ./services/common
+COPY services/${SERVICE_PACKAGE} ./services/${SERVICE_PACKAGE}
 
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
 USER appuser

@@ -1,12 +1,22 @@
 # Многоуровневая память
 
-Память разделена на два независимых HTTP-сервиса над одной MongoDB. Область записи задают
+Система персистентной памяти отделена от банковской и travel-систем сетями и
+проектом Langfuse `Persistent Memory`. Внутри неё два HTTP-сервиса над одной MongoDB. Область записи задают
 обязательные `agent_id` и `user_id`; дополнительный идентификатор области не используется.
 
 - `memory-service :8002` — data plane, доступный `banking-agent`. Он хранит текущий диалог,
   pending actions и кандидаты из внешних источников, а долгосрочные слои только читает.
 - `memory-orchestrator :8004` — control plane с отдельной identity `memory-operator`. Это
   LLM-агент, который единолично создаёт и изменяет episodic, semantic и procedural память.
+
+Банк обращается только к шлюзу `memory-api :8002`. Через него недоступны MongoDB
+и операторский API оркестратора. Внутренние `memory-service` и `memory-orchestrator`
+принадлежат системе памяти, а не банковскому агенту.
+
+Среди предметных агентов к API памяти подключён только банковский. Тревел-агент
+не хранит здесь свою историю или воспоминания. Подключение второй системы требует
+контракта контекста, отдельной идентичности и проверки областей доступа;
+эта работа включена в [примерный план курса](COURSE_PLAN.md).
 
 У токена Banking Agent audience `memory-service`; audience `memory-orchestrator` у него нет.
 Поэтому prompt или tool choice банковской LLM не может напрямую вызвать promotion, удалить
@@ -94,6 +104,49 @@ Data plane создаёт embedding запроса, сначала примен�
 кандидатов. Лексического или детерминированного fallback нет: недоступная embedding-модель
 даёт явный `502/503`.
 
+## Контекст банковского LLM
+
+В начале каждого turn Banking Agent параллельно получает:
+
+- профиль через secure MCP `get_customer_info` с пользовательским JWT; `id` профиля
+  обязан совпадать с аутентифицированным клиентом;
+- всю сохранённую историю `user`/`assistant` текущего `conversation_id` с фильтрами
+  `agent_id=banking-agent`, `user_id=<текущий клиент>` и хронологическим порядком;
+- semantic recall долгосрочных слоёв `episodic`, `semantic`, `procedural`: по 8 записей
+  каждого слоя, до 24 суммарно. Это релевантная выборка с действующими scope/TTL filters,
+  а не выгрузка всей MongoDB. Поиск ранжирует до 500 последних кандидатов каждого слоя.
+
+Все банковские LLM-шаги (`route_intent`, `extract_travel_request`, `compose_response`,
+а в уязвимой сборке также `select_abs_customer`)
+получают единый JSON-контекст: `current_date`, `current_datetime`, `timezone`,
+`customer_profile`, `conversation_history`, `memory_context`. Снимок даты/времени
+делается на каждый turn в `BANK_TIMEZONE` (по умолчанию `Europe/Moscow`) и сохраняется
+между его LLM-шагами. Базовый профиль содержит только `full_name`, `gender`,
+`client_type`, `vip`; токен, телефон и email туда не включаются. Профиль не кэшируется
+между пользователями. Если пользователь явно запросил профиль, его результат навыка
+может содержать контактные поля как обычные данные АБС.
+
+История передаётся полностью в `conversation_history`, без лимита последних N сообщений.
+Новое сообщение передаётся отдельно в `user_message`, а после ответа обе новые реплики
+сохраняются в working memory. Контексты разных сессий не объединяются; между сессиями
+действует только долгосрочный recall. `memory_context` сохраняет содержимое **всех**
+выбранных записей без дополнительного общего лимита 8 и без обрезки до 1500 символов;
+`source`/`trust` остаются видны модели. Working memory не дублируется в recall, потому
+что история уже получена отдельным полным чтением.
+
+На шаге ответа LLM дополнительно получает `trusted_skill_draft` и `skill_data` с
+результатами навыка. Полная история, профиль и память банковского агента не передаются
+партнёрскому Travel Agent или внешним поисковым MCP. Лимит контекстного окна остаётся
+ограничением выбранной модели: приложение не сокращает историю молча; ошибка провайдера
+возвращается как явная ошибка LLM.
+
+Проверка `tests/test_agent_context.py` перехватывает HTTP-запросы OpenAI SDK во время
+полного запуска банковского графа и проверяет 40 реплик, 24 длинных воспоминания из трёх
+слоёв, персонализацию, дату на границе суток UTC/Москва и отсутствие JWT/контактов в
+базовом контексте. Счётчики в Langfuse позволяют сверять объём контекста без записи
+самих промптов: `conversation_messages`, `memory_records`, `memory_layers`,
+`has_customer_profile`, `current_date`, `timezone`.
+
 Read API, доступный Banking Agent:
 
 | Метод | Назначение |
@@ -108,11 +161,20 @@ Read API, доступный Banking Agent:
 
 ## LLM Memory Orchestrator
 
-Оркестратор запускает collection двумя способами:
+Оркестратор обрабатывает очередь двумя способами:
 
-1. scheduler каждые `MEMORY_ORCHESTRATION_INTERVAL_SECONDS` — по умолчанию 1800 секунд;
+1. по расписанию с интервалом `MEMORY_ORCHESTRATION_INTERVAL_SECONDS` из `.env`:
+   по умолчанию 1800 секунд; для короткого опыта можно поставить `10`, а `0`
+   отключает периодический запуск;
 2. операторский `POST /api/v1/orchestrator/collect` либо
    `POST /api/v1/episodic/agent/collect/{thread_id}`.
+
+Ручной запрос работает при любом режиме расписания и дожидается результата обработки.
+Он принимает фильтры `agent_id`, `user_id`, `conversation_id` и `limit` от 1 до 500.
+Обрабатываются только ожидающие задания; завершённые не запускаются повторно,
+долговременная память не очищается. Для нового опыта материал нужно заново поставить
+в очередь. Настройка, проверка `/health` и пример запроса для отдельного диалога —
+в [конфигурации](CONFIGURATION.md#обработка-долговременной-памяти).
 
 Он атомарно переводит job `pending → processing`, вызывает отдельный LLM-агент и создаёт до
 восьми promotion. Episodic остаётся пользовательским; semantic и procedural намеренно
@@ -143,16 +205,11 @@ Mutation API существует только на control plane:
 | `PUT /api/v1/procedural/{agent_id}/{procedure_id}` | обновить процедуру и embedding |
 | `DELETE /api/v1/procedural/{agent_id}/{procedure_id}` | удалить процедуру |
 
-Пример ручного запуска:
+Для ручной обработки получите `MEMORY_OPERATOR_TOKEN` по [инструкции](RUNBOOK.md#токены-для-лабораторных-запросов):
 
 ```bash
-TOKEN=$(curl -fsS http://localhost:8080/realms/agentic-banking/protocol/openid-connect/token \
-  -d grant_type=client_credentials \
-  -d client_id=memory-operator \
-  -d client_secret="$KEYCLOAK_MEMORY_OPERATOR_SECRET" | jq -r .access_token)
-
 curl -fsS http://localhost:8004/api/v1/orchestrator/collect \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $MEMORY_OPERATOR_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"agent_id":"banking-agent","limit":100}'
 ```

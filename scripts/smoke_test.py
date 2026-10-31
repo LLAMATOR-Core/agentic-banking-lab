@@ -213,11 +213,18 @@ def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
     )
     assert travel["intent"] == "travel" and "a2a.travel.plan-trip" in travel["tool_calls"]
     travel_result = travel["data"]["travel"]
-    assert travel_result["provider_modes"]["flight_search"] == "mock-external-mcp"
-    assert travel_result["flights"]
-    assert all(item["synthetic"] for item in travel_result["flights"])
+    provider = httpx.get(f"{TRAVEL_AGENT}/health", timeout=5).json()["flight_provider"]
+    if provider == "mock":
+        assert travel_result["provider_modes"]["flight_search"] == "mock-external-mcp"
+        assert len(travel_result["flights"]) == 1
+        assert travel_result["flights"][0]["synthetic"]
+    else:
+        assert travel_result["provider_modes"]["flight_search"] == "live-mcp-read-only"
+        assert all(item["synthetic"] is False for item in travel_result["flights"])
     assert travel_result["booking"]["mode"] == "mock-local"
     assert travel_result["booking"]["external_side_effect"] is False
+    assert travel_result["accommodations"] == []
+    assert travel_result["provider_modes"]["hotel_search"] == "not-supported"
     assert "packages" not in travel_result
     print("OK A2A informational travel search and local mock-booking boundary")
 

@@ -229,6 +229,7 @@ async def configure() -> None:
         for client_id in (
             "abs-mcp",
             "duckduckgo-mcp",
+            "travel-duckduckgo-mcp",
             "memory-service",
             "memory-orchestrator",
         ):
@@ -260,11 +261,12 @@ async def configure() -> None:
             {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"},
         )
         travel_agent = await admin.ensure_client("travel-agent")
+        await admin.delete_mapper_if_exists(travel_agent, "audience-duckduckgo-mcp")
         await admin.ensure_mapper(
             travel_agent,
-            "audience-duckduckgo-mcp",
+            "audience-travel-duckduckgo-mcp",
             "oidc-audience-mapper",
-            {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"},
+            {"included.client.audience": "travel-duckduckgo-mcp", "access.token.claim": "true"},
         )
         memory_operator = await admin.ensure_client(
             "memory-operator",

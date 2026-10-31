@@ -1,194 +1,163 @@
-# Runbook
+# Запуск и диагностика
 
-## Запуск и готовность
+## Запуск и изменение настроек
+
+Создайте `.env` из `.env.example`, укажите ключ и модели LLM, затем выполните:
 
 ```bash
-cp .env.example .env
-# заполните OPENAI_API_KEY и HASDATA_API_KEY
-docker compose up --build -d
-docker compose ps
+docker compose --env-file .env up -d --build
+docker compose --env-file .env ps
 ```
 
-LLM обязательна для Banking Agent, Travel Agent и Memory Orchestrator. Embedding-модель
-обязательна для memory recall и promotion. `OPENAI_BASE_URL` может указывать на единый
-OpenAI-compatible endpoint с Chat Completions и Embeddings. Если локальный
-провайдер не требует аутентификацию, задайте непустой placeholder в `OPENAI_API_KEY`.
-Задайте `EMBEDDING_MODEL`; по умолчанию используется `text-embedding-3-small`.
-Один travel turn включает несколько последовательных LLM/MCP шагов, поэтому внутренний
-`TRAVEL_HTTP_TIMEOUT_SECONDS` по умолчанию равен 180 секундам.
+После любого изменения `.env` повторите команду запуска. Все сервисы стенда, включая
+оба MCP АБС и мок авиабилетов, запускаются без дополнительных параметров.
+Режимы подключений описаны в [настройках](CONFIGURATION.md).
 
-Сначала готовы PostgreSQL/MongoDB, затем Keycloak и прикладные сервисы; Langfuse дополнительно ждёт ClickHouse, Redis и SeaweedFS. Проверки:
+`keycloak-configurator` настраивает тестовых пользователей и клиентов. Его успешное
+завершение с кодом 0 — штатное поведение. Остальные сервисы должны работать.
+
+## Проверка готовности
 
 ```bash
-curl -fsS http://localhost:8080/realms/agentic-banking/.well-known/openid-configuration >/dev/null
 curl -fsS http://localhost:8000/health
-curl -fsS http://localhost:8001/health
 curl -fsS http://localhost:8002/health
 curl -fsS http://localhost:8003/health
 curl -fsS http://localhost:8004/health
-curl -fsS http://localhost:8101/health
-curl -fsS http://localhost:8104/health
-curl -fsS http://localhost:8105/health
 curl -fsS http://localhost:8106/health
-curl -fsS http://localhost:8106/mcp \
-  -H "Authorization: Bearer ${FLIGHTS_MCP_AUTH_TOKEN:-local-flights-mcp}" \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"ready","method":"tools/list","params":{}}'
 ```
 
-Если UI открылся до готовности Keycloak, подождите и обновите страницу. Для CI используйте
-`scripts/smoke_test.py`, который ждёт readiness и требует доступную LLM.
+У банковского агента проверьте `abs_mcp_mode`, у тревел-агента — `flight_provider`.
+У оркестратора памяти проверьте `schedule_seconds` и `schedule_enabled`:
+интервал задаётся через `MEMORY_ORCHESTRATION_INTERVAL_SECONDS` в `.env`, `0` отключает
+расписание. Ручная обработка остаётся доступна через операторский API;
+пример — в [настройках памяти](CONFIGURATION.md#обработка-долговременной-памяти).
+Для Keycloak откройте [описание OIDC](http://localhost:8080/realms/agentic-banking/.well-known/openid-configuration),
+для Langfuse — [интерфейс](http://localhost:3001).
 
-## Обновление существующего стенда на SeaweedFS и Flights MCP
-
-Не копируйте `.env.example` поверх заполненного `.env`. Удалите старые `AVIASALES_*`,
-добавьте `FLIGHTS_MCP_AUTH_TOKEN`, `SEAWEEDFS_ACCESS_KEY`, `SEAWEEDFS_SECRET_KEY` из примера.
-Compose также имеет локальные значения по умолчанию для этих трёх переменных.
-S3 endpoint для Langfuse внутри сети — `http://seaweedfs:8333`, для браузера —
-`http://localhost:9090`; bucket `langfuse` создаётся автоматически. Порт старой консоли
-9091 больше не используется. Readiness делает подписанный запрос к bucket: после старта
-можно проверить `docker compose ps seaweedfs` и `docker compose logs seaweedfs`.
-
-Старый volume `agentic-banking_minio-data` несовместим с форматом SeaweedFS и не
-подключается к новому контейнеру. Он не удаляется при обновлении. Если нужны прежние
-S3-объекты трасс/медиа, сначала перенесите их через S3, пока старый MinIO ещё работает.
-Для стандартных имён контейнеров и локальных credentials:
+Логи отдельных сервисов:
 
 ```bash
-docker compose stop langfuse-web langfuse-worker
-docker compose -f docker-compose.yml -f infra/seaweedfs-migration.yml up -d --wait seaweedfs
-docker exec \
-  -e MIGRATION_ACCESS_KEY="${SEAWEEDFS_ACCESS_KEY:-langfuse}" \
-  -e MIGRATION_SECRET_KEY="${SEAWEEDFS_SECRET_KEY:-local-seaweedfs-secret}" \
-  agentic-banking-minio-1 sh -c '
-    mc alias set legacy http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
-    mc alias set seaweed http://seaweedfs:8333 "$MIGRATION_ACCESS_KEY" "$MIGRATION_SECRET_KEY" >/dev/null &&
-    mc mirror --overwrite legacy/langfuse seaweed/langfuse
-  '
+docker compose --env-file .env logs -f --tail=100 banking-agent travel-agent
+docker compose --env-file .env logs --tail=100 keycloak-configurator
+docker compose --env-file .env logs --tail=100 memory-service memory-orchestrator
+docker compose --env-file .env logs --tail=100 seaweedfs langfuse-web langfuse-worker
 ```
 
-Если ключи менялись, передайте в shell значения из вашего `.env`. При ошибке копирования
-сначала устраните её; не переключайте Langfuse на неполное хранилище. После успешного
-переноса остановите два заменяемых контейнера и примените основной Compose:
+## Проверка изоляции
+
+После запуска выполните:
 
 ```bash
-docker stop agentic-banking-minio-1 agentic-banking-aviasales-mcp-1
-docker compose up --build -d --remove-orphans
-docker compose ps
+python3 scripts/check_system_isolation.py
 ```
 
-`--remove-orphans` удаляет контейнеры старых сервисов и освобождает порты 9090/8106,
-сохраняя named volumes. Новый `seaweedfs-data` хранит и объекты, и метаданные.
-При новом развёртывании этап переноса не нужен. Проверьте после обновления `/health`
-Flights MCP, отказ 401 без bearer и наличие синтетических рейсов в travel-ответе;
-для Langfuse — приём новой трассы и открытие старой после переноса.
+Проверка обращается к Docker и выполняет запросы из трёх агентных контейнеров.
+Она проверяет разрешённые API, закрытые пути шлюзов, недоступность чужих сервисов
+по адресам контейнеров, состав кода в образах и соответствие ключа Langfuse
+единственному своему проекту. Также она выполняет авторизованный A2A-запрос к моку
+через тревел-агента и чтение пустой истории через API памяти.
+Банковские операции и изменение памяти она не выполняет.
 
-## Логи
+В ответах `/health` есть раздел `observability` с `system_id`, именем и идентификатором
+проекта. Он не содержит ключей. В Langfuse должны быть проекты `Banking`, `Travel`
+и `Persistent Memory`; корреляция обращений доступна через `session_id` и
+`metadata.correlation_id`.
+
+Для диагностики приёмников:
 
 ```bash
-docker compose logs -f --tail=200 banking-agent abs-mcp abs-mcp-vulnerable abs-api
-docker compose logs -f --tail=200 travel-agent flights-mcp duckduckgo-mcp
-docker compose logs -f --tail=200 memory-service memory-orchestrator mongo
-docker compose logs -f --tail=200 keycloak
-docker compose logs -f --tail=200 langfuse-web langfuse-worker
+docker compose --env-file .env logs --tail=100 langfuse-web langfuse-travel langfuse-memory
 ```
 
-HTTP API errors не должны содержать token/secret. Для причин Keycloak 401 сначала декодируйте claims локально без публикации полного токена и проверьте `iss`, `azp`, `aud`, `exp`.
+Уже существующий смешанный проект сохраняется для просмотра старых трасс. Новые
+проекты имеют фиксированные идентификаторы и получают ключи из `.env` при первом
+создании. Чтобы заменить ключ существующего проекта, сначала создайте новый ключ
+в настройках этого проекта Langfuse, затем внесите пару в `.env` и повторите запуск.
 
-## Типовые проблемы
+## Частые проблемы
 
-### UI показывает `ИИ-модель недоступна`
+| Признак | Что проверить |
+|---|---|
+| Интерфейс открылся, но вход не работает | Готовность Keycloak и результат `keycloak-configurator`; затем обновите страницу |
+| `llm_unavailable` | Ключ, адрес и доступность провайдера, названия моделей, лимиты запросов |
+| `llm_invalid_response` | Ответ модели не прошёл проверку JSON-схемы; посмотрите соответствующий LLM-шаг в Langfuse |
+| Нет долгосрочной памяти | Доступность модели `EMBEDDING_MODEL`, журнал оркестратора и наличие обработанных записей |
+| Ошибка поиска Туту | Доступ к `TUTU_MCP_URL` из контейнера `travel-agent` |
+| Мок возвращает не ту заметку | `FLIGHTS_MOCK_NOTE` в `.env` и текст выбранного файла в `infra/flights-mcp/` |
+| Изменение режима не применилось | Повторный `up -d --build`; также проверьте, не задана ли та же переменная в оболочке |
+| `invalid issuer` | Внешний issuer `http://localhost:8080/realms/agentic-banking` и настройки hostname Keycloak |
+| Ошибка `azp` или `aud` | Клиент и назначение JWT; для защищённого MCP нужен пользовательский токен, а не сервисный |
+| Langfuse не принимает трассы | Совпадение отдельной пары ключей каждой системы с её проектом Langfuse, готовность ClickHouse, Redis и SeaweedFS |
 
-Проверьте `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `EMBEDDING_MODEL` и
-доступность endpoint из Docker
-network. Для сервера на хосте macOS обычно нужен URL вида
-`http://host.docker.internal:<port>/v1`, а не `localhost`. Если совместимый провайдер не
-поддерживает `response_format={"type":"json_object"}`, установите `OPENAI_JSON_MODE=false`:
-требование вернуть JSON Schema останется в prompt, а ответ всё равно будет проверен Pydantic.
+Если провайдер LLM работает на хосте Docker Desktop, используйте
+`http://host.docker.internal:<порт>/v1`. `localhost` внутри контейнера указывает на
+сам контейнер. Если провайдер не поддерживает `response_format`, задайте
+`OPENAI_JSON_MODE=false`; проверка JSON-ответа по схеме при этом остаётся.
 
-После изменения конфигурации пересоздайте три сервиса:
+Отсутствие эмбеддингов возвращает ошибку, а не заменяется поиском по ключевым словам.
+Ошибки поисковых источников попадают в `search_errors`; Туту не подменяется моком.
+Недоступность Langfuse не должна прерывать банковскую операцию, но часть трасс может потеряться.
+
+## Проверка контекста LLM
+
+В Langfuse откройте шаги `llm.banking-agent.route_intent`, `extract_travel_request`
+и `compose_response`. В уязвимом режиме АБС также есть `select_abs_customer`.
+Сравните поля метаданных:
+
+- `conversation_messages` — число сохранённых реплик текущего диалога;
+- `memory_records` и `memory_layers` — число выбранных воспоминаний и распределение по слоям;
+- `has_customer_profile` — наличие базового профиля;
+- `current_date` и `timezone` — дата и часовой пояс.
+
+На всех LLM-шагах одного обращения значения должны совпадать. После завершённого
+обращения в историю добавляются две реплики. Подробный контракт — в [описании памяти](MEMORY.md#контекст-банковского-llm).
+
+## Токены для лабораторных запросов
+
+Для приведённых ниже команд нужны `curl` и `jq`. Получите пользовательские токены:
 
 ```bash
-docker compose up -d --build memory-service memory-orchestrator travel-agent banking-agent
+IVAN_TOKEN=$(curl -fsS http://localhost:8080/realms/agentic-banking/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=bank-ui \
+  -d username=ivan.petrov -d password=banking-demo | jq -r .access_token)
+ANNA_TOKEN=$(curl -fsS http://localhost:8080/realms/agentic-banking/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=bank-ui \
+  -d username=anna.sokolova -d password=banking-demo | jq -r .access_token)
 ```
 
-Ответы `503/llm_unavailable` означают отсутствие связи, неверный ключ, rate limit или ошибку
-провайдера. `502/llm_invalid_response` означает, что модель вернула невалидный JSON или
-несуществующий ID. Скрытого fallback нет.
-
-### Realm не обновился
-
-Startup import пропускает уже существующий realm, поэтому `keycloak-configurator` выполняет
-идемпотентное обновление через Admin API. Проверьте
-`docker compose logs keycloak-configurator`: успешный контейнер завершается с code 0. Сброс
-volumes для обновления realm не требуется.
-
-### `invalid issuer`
-
-Браузерный issuer намеренно `http://localhost:8080/realms/agentic-banking`. Контейнеры получают JWKS по внутреннему URL, но проверяют внешний issuer. Не меняйте только одну из переменных `KEYCLOAK_ISSUER`/hostname.
-
-### `Calling client is not allowed` / invalid audience
-
-Проверьте нужный token flow и логи `keycloak-configurator`. Для Token Exchange исходный
-user token обязан содержать `bank-mcp` в `aud`; exchanged token — `abs-api`; его `azp` —
-`bank-mcp`. Не передавайте client-credentials token в secure MCP.
-
-### Нет инвестиционных новостей
-
-Проверьте egress/DNS контейнера `duckduckgo-mcp`. Это soft dependency: портфель и продукты
-продолжают работать, в data будет пустой `news`.
-
-### Booking или Flights MCP недоступен
-
-Для Booking проверьте `HASDATA_API_KEY`, credits и egress контейнера `travel-agent` к
-`mcp.hasdata.com`. Для Flights MCP проверьте совпадение `FLIGHTS_MCP_AUTH_TOKEN` у
-`travel-agent` и `flights-mcp`, `/health` на порту 8106 и `docker compose logs flights-mcp`.
-Если переменная не задана в shell для curl-примера, используйте локальное значение
-`local-flights-mcp` из `.env.example`. Внешняя сеть и токены авиакомпаний моку не нужны.
-Ответы всегда синтетические (`mode=mock-external-mcp`); 401 без отдельного секрета ожидаем.
-Ошибка источника попадает в `search_errors` и не подменяется локальным fallback.
-
-### Langfuse не принимает spans
-
-Сравните `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY` у приложений с init keys Langfuse и проверьте `http://localhost:3001`. Для Langfuse SDK v4 identity задаётся через `propagate_attributes`: `user_id` — отдельное поле trace, `agent_id` — metadata и tag `agent:<id>`, `conversation_id` — session. SDK работает best-effort: сбой collector не ломает операции. После остановки collector часть spans может быть потеряна.
-
-### Диалог сохранён, но migration памяти не завершён
-
-Проверьте `docker compose logs memory-orchestrator` и коллекцию MongoDB `memory_jobs`.
-`pending` означает ожидание или retry worker, `processing` — текущий LLM-вызов, `completed`
-содержит `promoted_count`, `failed` после трёх попыток — тип и текст ошибки. Working history сохраняется до постановки job,
-поэтому недоступность LLM при фоновой миграции не должна удалять реплики или ломать переход
-между сессиями.
-
-По умолчанию scheduler запускает collection раз в 1800 секунд. Для немедленной обработки
-получите client-credentials token `memory-operator` и вызовите control plane:
+Для запуска обработки памяти нужен отдельный сервисный токен:
 
 ```bash
-MEMORY_OPERATOR_TOKEN=$(curl -fsS \
-  http://localhost:8080/realms/agentic-banking/protocol/openid-connect/token \
-  -d grant_type=client_credentials \
-  -d client_id=memory-operator \
-  -d client_secret="$KEYCLOAK_MEMORY_OPERATOR_SECRET" | jq -r .access_token)
-
-curl -fsS http://localhost:8004/api/v1/orchestrator/collect \
-  -H "Authorization: Bearer $MEMORY_OPERATOR_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"agent_id":"banking-agent","limit":100}'
+MEMORY_OPERATOR_TOKEN=$(curl -fsS http://localhost:8080/realms/agentic-banking/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=memory-operator \
+  -d client_secret=memory-operator-secret | jq -r .access_token)
 ```
 
-Banking Agent обращается только к `memory-service :8002`; отсутствие у него audience
-`memory-orchestrator` является ожидаемым и проверяется smoke-тестом.
+Если пароли или секрет клиента изменены, используйте свои значения. Просроченный токен
+получите заново. Передача `.env` в Compose не создаёт переменные в вашей оболочке.
 
-### Недостаточно памяти Docker
+## Остановка и данные
 
-Langfuse v4 использует ClickHouse, Redis и SeaweedFS. Эти контейнеры входят в обязательный
-профиль стенда: отключение их или Langfuse лишает эксперименты проверяемой трассировки.
-Увеличьте лимит памяти Docker либо временно остановите другие локальные контейнеры.
-
-## Тесты и качество
+Остановка с сохранением данных:
 
 ```bash
-python -m venv .venv
+docker compose --env-file .env down
+```
+
+Удаление всех тестовых данных PostgreSQL, MongoDB и инфраструктуры Langfuse:
+
+```bash
+docker compose --env-file .env down -v
+```
+
+Для смены MCP или модели удалять тома не требуется. Ранее отравленная память после
+переключения режима сохраняется; удаляйте нужные записи через операторский API.
+Для старого развёртывания есть отдельная [инструкция переноса из MinIO в SeaweedFS](STORAGE_MIGRATION.md).
+
+## Автоматические проверки
+
+```bash
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 ruff check services tests scripts
@@ -196,15 +165,7 @@ pytest -q
 python scripts/smoke_test.py
 ```
 
-`smoke_test.py --confirm` выполняет перевод 1 RUB между двумя счетами того же demo customer и повторяет confirmation для проверки идемпотентности.
-
-## Данные и сброс
-
-`docker compose down` сохраняет volumes. `make reset` удаляет PostgreSQL, MongoDB, Langfuse, ClickHouse, Redis и SeaweedFS data. Для учебного бэкапа остановите запись и сохраните named volumes штатными средствами Docker; для production используйте нативные PostgreSQL/MongoDB/ClickHouse backup procedures.
-
-## Изменение провайдера
-
-При замене поискового провайдера не меняйте tool name/input schema без новой версии
-контракта. Сначала добавьте contract tests, затем provider implementation и только потом
-переключите Compose image. Мок-бронирование должно оставаться локальным и всегда возвращать
-`external_side_effect=false`.
+Тест `tests/test_agent_context.py` проверяет тело HTTP-запросов SDK с подменённым
+ответом провайдера. Тесты режимов Compose читают конфигурацию и не запускают контейнеры.
+Проверка `smoke_test.py` требует работающего стенда и доступной LLM. Параметр
+`--confirm` выполняет перевод 1 RUB между тестовыми счетами и проверяет повтор запроса.
