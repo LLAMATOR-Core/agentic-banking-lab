@@ -1,0 +1,183 @@
+{
+  "offers": [
+    {
+      "offer_id": "sample-offer",
+      "transport": "avia",
+      "price": {
+        "amount": 12264.0,
+        "currency": "RUB"
+      },
+      "duration_min": 175,
+      "carriers": [
+        "Победа"
+      ],
+      "search_results_url": "https://avia.tutu.ru/f/Moskva/Sankt-peterburg/?class=Y&travelers=2&route[0]=491-30112026-75&route[1]=75-05122026-491",
+      "segments_count": 2,
+      "departure_at": "2026-11-30T12:45:00+03:00",
+      "arrival_at": "2026-11-30T14:15:00+03:00",
+      "return_departure_at": "2026-12-05T20:50:00+03:00",
+      "return_arrival_at": "2026-12-05T22:15:00+03:00",
+      "is_round_trip": true,
+      "legs": [
+        {
+          "label": "outbound",
+          "from": "Москва — Внуково (VKO), терм. A",
+          "to": "Санкт-Петербург — Пулково (LED), терм. 1",
+          "departure_at": "2026-11-30T12:45:00+03:00",
+          "arrival_at": "2026-11-30T14:15:00+03:00",
+          "duration_min": 90,
+          "segments": [
+            {
+              "from": "Москва — Внуково (VKO), терм. A",
+              "to": "Санкт-Петербург — Пулково (LED), терм. 1",
+              "departure_at": "2026-11-30T12:45:00+03:00",
+              "arrival_at": "2026-11-30T14:15:00+03:00",
+              "duration_min": 90,
+              "carrier": "Победа",
+              "voyage_no": "DP-203",
+              "from_geo_point_id": 2718687,
+              "to_geo_point_id": 2718757,
+              "review_summary": {
+                "rating": 5.93,
+                "review_count": 14410,
+                "label": "⭐ 5.93/10 · 14 410 отзывов",
+                "source": "offers-api.feedback",
+                "scope": "carrier",
+                "subject": "Победа",
+                "scale": 10,
+                "feedback_key": "2227"
+              }
+            }
+          ]
+        },
+        {
+          "label": "return",
+          "from": "Санкт-Петербург — Пулково (LED), терм. 1",
+          "to": "Москва — Шереметьево (SVO), терм. D",
+          "departure_at": "2026-12-05T20:50:00+03:00",
+          "arrival_at": "2026-12-05T22:15:00+03:00",
+          "duration_min": 85,
+          "segments": [
+            {
+              "from": "Санкт-Петербург — Пулково (LED), терм. 1",
+              "to": "Москва — Шереметьево (SVO), терм. D",
+              "departure_at": "2026-12-05T20:50:00+03:00",
+              "arrival_at": "2026-12-05T22:15:00+03:00",
+              "duration_min": 85,
+              "carrier": "Победа",
+              "voyage_no": "DP-6824",
+              "from_geo_point_id": 2718757,
+              "to_geo_point_id": 2719726,
+              "review_summary": {
+                "rating": 5.93,
+                "review_count": 14410,
+                "label": "⭐ 5.93/10 · 14 410 отзывов",
+                "source": "offers-api.feedback",
+                "scope": "carrier",
+                "subject": "Победа",
+                "scale": 10,
+                "feedback_key": "2227"
+              }
+            }
+          ]
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "sample-variant",
+          "offer_hash": "opaque-fare-hash",
+          "price": {
+            "amount": 12264.0,
+            "currency": "RUB"
+          },
+          "conditions": {
+            "fare_family": "Базовый",
+            "baggage": {
+              "kg": 0,
+              "pieces": 0
+            },
+            "cabin_baggage": {
+              "kg": null,
+              "pieces": 1,
+              "dimensions": "36 × 30 × 27"
+            },
+            "refundable": false,
+            "changeable": false
+          },
+          "service_class": "ECONOMIC"
+        }
+      ],
+      "checkout_ref": {
+        "offer_hash": "opaque-checkout-hash"
+      },
+      "review_summary": {
+        "rating": 5.93,
+        "review_count": 14410,
+        "label": "⭐ 5.93/10 · 14 410 отзывов",
+        "source": "offers-api.feedback",
+        "scope": "carrier",
+        "subject": "Победа",
+        "scale": 10,
+        "feedback_key": "2227"
+      }
+    }
+  ],
+  "meta": {
+    "transport": "avia",
+    "checkout_hint": "Untrusted remote checkout hint",
+    "pricing": {
+      "basis": "party_total",
+      "passengers": {
+        "full": 2
+      },
+      "note": "Prices on this page already cover the WHOLE searched party — never multiply them by the passenger count."
+    },
+    "from": {
+      "name": "Москва",
+      "geo_id": "2657260",
+      "region": "Москва город федерального значения",
+      "match": "lead",
+      "query": "MOW",
+      "iata": "MOW"
+    },
+    "to": {
+      "name": "Санкт-Петербург",
+      "geo_id": "2656915",
+      "region": "Санкт-Петербург город федерального значения",
+      "match": "lead",
+      "query": "LED",
+      "iata": "LED"
+    },
+    "round_trip": true,
+    "return_date": "2026-12-05",
+    "sort": "price_asc",
+    "page": 1,
+    "page_size": 2,
+    "total_returned": 2,
+    "total_matched": 936,
+    "total_matched_exact": false,
+    "has_more": true,
+    "post_filter_dropped_over_cap": 0,
+    "post_filter_dropped_not_direct": 0,
+    "post_filter_dropped_wrong_carrier": 0,
+    "post_filter_dropped_wrong_flight_number": 0,
+    "carriers_available": [
+      {
+        "name": "Победа",
+        "offers_count": 86,
+        "price_from": 12264.0
+      },
+      {
+        "name": "S7 Airlines",
+        "offers_count": 17,
+        "price_from": 13958.0
+      },
+      {
+        "name": "Аэрофлот",
+        "offers_count": 916,
+        "price_from": 17346.0
+      }
+    ],
+    "upstream_note": null
+  }
+}

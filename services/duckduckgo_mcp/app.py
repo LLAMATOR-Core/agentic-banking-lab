@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 from ddgs import DDGS
@@ -116,4 +117,4 @@ tools = [
     ),
 ]
 
-app = create_mcp_app("duckduckgo-mcp", tools)
+app = create_mcp_app(os.getenv("MCP_SERVER_NAME", "duckduckgo-mcp"), tools)

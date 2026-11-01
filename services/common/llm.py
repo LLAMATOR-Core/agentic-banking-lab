@@ -20,7 +20,7 @@ from openai import (
 )
 from pydantic import BaseModel, ValidationError
 
-from services.common.tracing import observation
+from services.common.tracing import observation, traced
 
 logger = logging.getLogger(__name__)
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
@@ -80,6 +80,7 @@ class LLMClient:
             "provider": provider,
         }
 
+    @traced("llm.generate-json", as_type="chain")
     async def generate_json(
         self,
         schema: type[SchemaT],
@@ -112,12 +113,37 @@ class LLMClient:
         if self.json_mode:
             request["response_format"] = {"type": "json_object"}
 
-        with observation(
-            f"llm.{self.component}.{operation}",
-            input={"schema": schema.__name__},
-            metadata={"component": self.component, "model": self.model},
-        ) as span:
-            for format_attempt in range(2):
+        context_metadata = {}
+        if isinstance(payload, dict) and "conversation_history" in payload:
+            memories = payload.get("memory_context", [])
+            context_metadata = {
+                "current_date": payload.get("current_date"),
+                "timezone": payload.get("timezone"),
+                "has_customer_profile": bool(payload.get("customer_profile")),
+                "conversation_messages": len(payload["conversation_history"]),
+                "memory_records": len(memories),
+                "memory_layers": {
+                    layer: sum(item.get("memory_type") == layer for item in memories)
+                    for layer in ("episodic", "semantic", "procedural")
+                },
+            }
+
+        for format_attempt in range(2):
+            with observation(
+                f"llm.{self.component}.{operation}",
+                as_type="generation",
+                input=request["messages"],
+                model=self.model,
+                model_parameters={
+                    key: value for key, value in request.items() if key not in {"messages", "model"}
+                },
+                metadata={
+                    "component": self.component,
+                    "schema": schema.__name__,
+                    "format_attempt": format_attempt + 1,
+                    **context_metadata,
+                },
+            ) as span:
                 try:
                     response = await self.client.chat.completions.create(**request)
                 except (APIConnectionError, APITimeoutError) as exc:
@@ -150,8 +176,21 @@ class LLMClient:
 
                 if not response.choices or not response.choices[0].message.content:
                     raise LLMResponseError("ИИ-модель не вернула ответ")
-                raw_content = response.choices[0].message.content.strip()
-                content = raw_content
+                raw_content = response.choices[0].message.content
+                usage = getattr(response, "usage", None)
+                usage_details = {
+                    key: value
+                    for key, value in {
+                        "input": getattr(usage, "prompt_tokens", None),
+                        "output": getattr(usage, "completion_tokens", None),
+                    }.items()
+                    if value is not None
+                }
+                span.update(
+                    output={"role": "assistant", "content": raw_content},
+                    usage_details=usage_details or None,
+                )
+                content = raw_content.strip()
                 if content.startswith("```"):
                     lines = content.splitlines()
                     content = "\n".join(lines[1:-1]).strip()
@@ -159,6 +198,7 @@ class LLMClient:
                     parsed = schema.model_validate_json(content)
                 except (ValidationError, ValueError, json.JSONDecodeError) as exc:
                     validation_summary = _validation_error_summary(exc)
+                    span.update(level="WARNING", status_message=validation_summary)
                     logger.warning(
                         "Invalid LLM JSON for %s/%s (attempt %s): %s",
                         self.component,
@@ -181,17 +221,6 @@ class LLMClient:
                         ]
                         continue
                     raise LLMResponseError() from exc
-                usage = getattr(response, "usage", None)
-                span.update(
-                    output={"schema": schema.__name__},
-                    metadata={
-                        "component": self.component,
-                        "model": self.model,
-                        "format_retries": format_attempt,
-                        "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                        "completion_tokens": getattr(usage, "completion_tokens", None),
-                    },
-                )
                 return parsed
 
         raise LLMResponseError()

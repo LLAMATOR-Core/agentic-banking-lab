@@ -13,7 +13,7 @@ from pymongo import DESCENDING, ReturnDocument
 
 from services.common.auth import Principal, require_principal
 from services.common.llm import LLMClient, LLMServiceError, install_llm_error_handlers
-from services.common.tracing import observation
+from services.common.tracing import observation, public_trace_config, traced
 from services.memory_service.core import (
     EmbeddingClient,
     MemoryStore,
@@ -88,13 +88,17 @@ embeddings = EmbeddingClient("memory-orchestrator")
 
 def _interval_seconds() -> int:
     try:
-        return max(int(os.getenv("MEMORY_ORCHESTRATION_INTERVAL_SECONDS", "1800")), 60)
-    except ValueError:
-        return 1800
+        interval = int(os.getenv("MEMORY_ORCHESTRATION_INTERVAL_SECONDS", "1800"))
+    except ValueError as exc:
+        raise ValueError("MEMORY_ORCHESTRATION_INTERVAL_SECONDS must be an integer >= 0") from exc
+    if interval < 0:
+        raise ValueError("MEMORY_ORCHESTRATION_INTERVAL_SECONDS must be an integer >= 0")
+    return interval
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    interval = _interval_seconds()
     await store.connect()
     try:
         await _backfill_embeddings()
@@ -102,13 +106,18 @@ async def lifespan(_: FastAPI):
     except LLMServiceError:
         # The control API must still start and expose an explicit provider error on use.
         pass
-    scheduler = asyncio.create_task(_scheduler(), name="memory-orchestrator-scheduler")
+    scheduler = (
+        asyncio.create_task(_scheduler(interval), name="memory-orchestrator-scheduler")
+        if interval
+        else None
+    )
     try:
         yield
     finally:
-        scheduler.cancel()
-        with suppress(asyncio.CancelledError):
-            await scheduler
+        if scheduler is not None:
+            scheduler.cancel()
+            with suppress(asyncio.CancelledError):
+                await scheduler
         await store.close()
 
 
@@ -125,10 +134,13 @@ async def health() -> dict[str, Any]:
         "llm": llm.public_config(),
         "embeddings": embeddings.public_config(),
         "schedule_seconds": _interval_seconds(),
+        "schedule_enabled": _interval_seconds() > 0,
+        "observability": public_trace_config(),
     }
 
 
 @app.get("/api/v1/episodic")
+@traced("memory.operator.search_all_episodes", system_boundary=True, agent_id="memory-orchestrator")
 async def search_all_episodes(
     _: Caller,
     query: str = Query(min_length=1, max_length=4000),
@@ -138,6 +150,9 @@ async def search_all_episodes(
 
 
 @app.get("/api/v1/episodic/{agent_id}")
+@traced(
+    "memory.operator.search_agent_episodes", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def search_agent_episodes(
     agent_id: str,
     _: Caller,
@@ -148,6 +163,9 @@ async def search_agent_episodes(
 
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}")
+@traced(
+    "memory.operator.search_user_episodes", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def search_user_episodes(
     agent_id: str,
     user_id: str,
@@ -155,12 +173,13 @@ async def search_user_episodes(
     query: str = Query(min_length=1, max_length=4000),
     limit: int = Query(default=10, ge=1, le=50),
 ) -> dict[str, Any]:
-    return await _operator_search(
-        "episodic", query, limit, agent_id=agent_id, user_id=user_id
-    )
+    return await _operator_search("episodic", query, limit, agent_id=agent_id, user_id=user_id)
 
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}/{episode_id}")
+@traced(
+    "memory.operator.get_operator_episode", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def get_operator_episode(
     agent_id: str, user_id: str, episode_id: str, _: Caller
 ) -> dict[str, Any]:
@@ -168,6 +187,9 @@ async def get_operator_episode(
 
 
 @app.get("/api/v1/semantic")
+@traced(
+    "memory.operator.search_all_semantics", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def search_all_semantics(
     _: Caller,
     query: str = Query(min_length=1, max_length=4000),
@@ -177,6 +199,9 @@ async def search_all_semantics(
 
 
 @app.get("/api/v1/semantic/{agent_id}")
+@traced(
+    "memory.operator.search_agent_semantics", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def search_agent_semantics(
     agent_id: str,
     _: Caller,
@@ -187,6 +212,9 @@ async def search_agent_semantics(
 
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}")
+@traced(
+    "memory.operator.search_user_semantics", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def search_user_semantics(
     agent_id: str,
     user_id: str,
@@ -194,12 +222,13 @@ async def search_user_semantics(
     query: str = Query(min_length=1, max_length=4000),
     limit: int = Query(default=10, ge=1, le=50),
 ) -> dict[str, Any]:
-    return await _operator_search(
-        "semantic", query, limit, agent_id=agent_id, user_id=user_id
-    )
+    return await _operator_search("semantic", query, limit, agent_id=agent_id, user_id=user_id)
 
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}/{semantic_id}")
+@traced(
+    "memory.operator.get_operator_semantic", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def get_operator_semantic(
     agent_id: str, user_id: str, semantic_id: str, _: Caller
 ) -> dict[str, Any]:
@@ -207,6 +236,11 @@ async def get_operator_semantic(
 
 
 @app.get("/api/v1/procedure/{agent_id}")
+@traced(
+    "memory.operator.search_operator_procedures",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+)
 async def search_operator_procedures(
     agent_id: str,
     _: Caller,
@@ -217,21 +251,24 @@ async def search_operator_procedures(
 
 
 @app.get("/api/v1/procedure/{agent_id}/{procedure_id}")
-async def get_operator_procedure(
-    agent_id: str, procedure_id: str, _: Caller
-) -> dict[str, Any]:
+@traced(
+    "memory.operator.get_operator_procedure", system_boundary=True, agent_id="memory-orchestrator"
+)
+async def get_operator_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str, Any]:
     return await _operator_get("procedural", procedure_id, agent_id=agent_id)
 
 
 @app.post("/api/v1/orchestrator/collect")
+@traced("memory.operator.collect", system_boundary=True, agent_id="memory-orchestrator")
 async def collect(request: CollectRequest, caller: Caller) -> dict[str, Any]:
     return await _collect_jobs(request, trigger=f"api:{caller.authorized_party}")
 
 
 @app.post("/api/v1/episodic/direct")
-async def create_episodes_direct(
-    request: DirectEpisodeRequest, caller: Caller
-) -> dict[str, Any]:
+@traced(
+    "memory.operator.create_episodes_direct", system_boundary=True, agent_id="memory-orchestrator"
+)
+async def create_episodes_direct(request: DirectEpisodeRequest, caller: Caller) -> dict[str, Any]:
     records = []
     for item in request.episodes:
         records.append(
@@ -249,9 +286,12 @@ async def create_episodes_direct(
 
 
 @app.post("/api/v1/episodic/agent")
-async def create_episodes_with_agent(
-    request: AgentMemoryRequest, caller: Caller
-) -> dict[str, Any]:
+@traced(
+    "memory.operator.create_episodes_with_agent",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+)
+async def create_episodes_with_agent(request: AgentMemoryRequest, caller: Caller) -> dict[str, Any]:
     decision = await _extract(
         {
             "kind": "manual-information",
@@ -273,6 +313,7 @@ async def create_episodes_with_agent(
 
 
 @app.post("/api/v1/episodic/agent/collect/{thread_id}")
+@traced("memory.operator.collect_thread", system_boundary=True, agent_id="memory-orchestrator")
 async def collect_thread(thread_id: str, caller: Caller) -> dict[str, Any]:
     return await _collect_jobs(
         CollectRequest(conversation_id=thread_id, limit=500),
@@ -281,11 +322,15 @@ async def collect_thread(thread_id: str, caller: Caller) -> dict[str, Any]:
 
 
 @app.delete("/api/v1/episodic/{episode_id}")
+@traced("memory.operator.delete_episode", system_boundary=True, agent_id="memory-orchestrator")
 async def delete_episode(episode_id: str, _: Caller) -> dict[str, Any]:
     return await _delete_by_id(episode_id, "episodic")
 
 
 @app.delete("/api/v1/episodic")
+@traced(
+    "memory.operator.delete_expired_episodes", system_boundary=True, agent_id="memory-orchestrator"
+)
 async def delete_expired_episodes(_: Caller) -> dict[str, Any]:
     store.ensure_ready()
     result = await store.memories.delete_many(
@@ -298,6 +343,11 @@ async def delete_expired_episodes(_: Caller) -> dict[str, Any]:
 
 
 @app.post("/api/v1/semantic")
+@traced(
+    "memory.operator.create_semantic_from_episodes",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+)
 async def create_semantic_from_episodes(
     request: SemanticFromEpisodesRequest, caller: Caller
 ) -> dict[str, Any]:
@@ -337,15 +387,15 @@ async def create_semantic_from_episodes(
 
 
 @app.delete("/api/v1/semantic/{agent_id}/{user_id}/{semantic_id}")
+@traced("memory.operator.delete_semantic", system_boundary=True, agent_id="memory-orchestrator")
 async def delete_semantic(
     agent_id: str, user_id: str, semantic_id: str, _: Caller
 ) -> dict[str, Any]:
-    return await _delete_by_id(
-        semantic_id, "semantic", {"agent_id": agent_id, "user_id": user_id}
-    )
+    return await _delete_by_id(semantic_id, "semantic", {"agent_id": agent_id, "user_id": user_id})
 
 
 @app.delete("/api/v1/semantic/{agent_id}/{user_id}")
+@traced("memory.operator.decay_semantic", system_boundary=True, agent_id="memory-orchestrator")
 async def decay_semantic(
     agent_id: str,
     user_id: str,
@@ -370,6 +420,7 @@ async def decay_semantic(
 
 
 @app.post("/api/v1/procedural/{agent_id}")
+@traced("memory.operator.create_procedure", system_boundary=True, agent_id="memory-orchestrator")
 async def create_procedure(
     agent_id: str,
     request: ProcedureCreate,
@@ -388,6 +439,7 @@ async def create_procedure(
 
 
 @app.put("/api/v1/procedural/{agent_id}/{procedure_id}")
+@traced("memory.operator.update_procedure", system_boundary=True, agent_id="memory-orchestrator")
 async def update_procedure(
     agent_id: str,
     procedure_id: str,
@@ -425,6 +477,7 @@ async def update_procedure(
 
 
 @app.delete("/api/v1/procedural/{agent_id}/{procedure_id}")
+@traced("memory.operator.delete_procedure", system_boundary=True, agent_id="memory-orchestrator")
 async def delete_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str, Any]:
     return await _delete_by_id(procedure_id, "procedural", {"agent_id": agent_id})
 
@@ -449,12 +502,7 @@ async def _operator_search(
     if user_id is not None:
         selector["user_id"] = user_id
     vector = await embeddings.embed(query)
-    rows = (
-        await store.memories.find(selector)
-        .sort("created_at", DESCENDING)
-        .limit(500)
-        .to_list()
-    )
+    rows = await store.memories.find(selector).sort("created_at", DESCENDING).limit(500).to_list()
     scored = sorted(
         ((cosine_similarity(vector, row.get("embedding") or []), row) for row in rows),
         key=lambda item: item[0],
@@ -494,9 +542,9 @@ async def _operator_get(
     return serialize(document)
 
 
-async def _scheduler() -> None:
+async def _scheduler(interval_seconds: int) -> None:
     while True:
-        await asyncio.sleep(_interval_seconds())
+        await asyncio.sleep(interval_seconds)
         try:
             await _collect_jobs(CollectRequest(limit=500), trigger="schedule")
         except asyncio.CancelledError:
@@ -508,7 +556,6 @@ async def _scheduler() -> None:
 
 async def _collect_jobs(request: CollectRequest, *, trigger: str) -> dict[str, Any]:
     store.ensure_ready()
-    backfilled = await _backfill_embeddings()
     selector: dict[str, Any] = {"status": "pending"}
     for field in ("agent_id", "user_id", "conversation_id"):
         value = getattr(request, field)
@@ -519,9 +566,12 @@ async def _collect_jobs(request: CollectRequest, *, trigger: str) -> dict[str, A
     created: list[dict[str, Any]] = []
     with observation(
         "memory.collect",
+        system_boundary=trigger == "schedule",
+        session_id=request.conversation_id,
         input={"trigger": trigger, "filters": selector, "limit": request.limit},
         agent_id="memory-orchestrator",
     ) as span:
+        backfilled = await _backfill_embeddings()
         for _ in range(request.limit):
             job = await store.jobs.find_one_and_update(
                 selector,
@@ -539,23 +589,32 @@ async def _collect_jobs(request: CollectRequest, *, trigger: str) -> dict[str, A
             if job is None:
                 break
             try:
-                decision = await _extract(job)
-                promoted = await _persist_promotions(
-                    job["agent_id"],
-                    job["user_id"],
-                    decision.promotions,
-                    source={
-                        "source": "memory-orchestrator",
-                        "source_user_id": job["user_id"],
-                        "derived_from_job": str(job["_id"]),
-                        "derived_from_turn": job.get("turn_id"),
-                        "trust": "untrusted-user-derived",
-                    },
-                    created_by="memory-orchestrator",
-                )
-                created.extend(promoted)
-                await _mark_job_completed(job, decision, len(promoted))
-                completed += 1
+                with observation(
+                    "memory.process-job",
+                    agent_id="memory-orchestrator",
+                    session_id=job.get("conversation_id"),
+                    user_id=job.get("user_id"),
+                    input=job,
+                    metadata={"job_id": str(job["_id"]), "client_agent_id": job["agent_id"]},
+                ) as job_span:
+                    decision = await _extract(job)
+                    promoted = await _persist_promotions(
+                        job["agent_id"],
+                        job["user_id"],
+                        decision.promotions,
+                        source={
+                            "source": "memory-orchestrator",
+                            "source_user_id": job["user_id"],
+                            "derived_from_job": str(job["_id"]),
+                            "derived_from_turn": job.get("turn_id"),
+                            "trust": "untrusted-user-derived",
+                        },
+                        created_by="memory-orchestrator",
+                    )
+                    created.extend(promoted)
+                    await _mark_job_completed(job, decision, len(promoted))
+                    job_span.update(output={"decision": decision, "created": promoted})
+                    completed += 1
             except Exception as exc:
                 failed += 1
                 retry = int(job.get("attempts", 1)) < 3
@@ -576,7 +635,7 @@ async def _collect_jobs(request: CollectRequest, *, trigger: str) -> dict[str, A
             output={
                 "completed": completed,
                 "failed": failed,
-                "created": len(created),
+                "created": created,
                 "backfilled": backfilled,
             }
         )
@@ -613,6 +672,7 @@ async def _extract(
     return decision
 
 
+@traced("memory.persist-promotions")
 async def _persist_promotions(
     agent_id: str,
     source_user_id: str,
@@ -642,6 +702,7 @@ async def _persist_promotions(
     return created
 
 
+@traced("memory.insert-memory")
 async def _insert_memory(
     *,
     agent_id: str,
@@ -668,6 +729,7 @@ async def _insert_memory(
     )
 
 
+@traced("memory.mark-job-completed")
 async def _mark_job_completed(
     job: dict[str, Any], decision: MigrationDecision, promoted_count: int
 ) -> None:
@@ -701,6 +763,7 @@ async def _mark_job_completed(
         )
 
 
+@traced("memory.delete-by-id")
 async def _delete_by_id(
     value: str, memory_type: str, scope: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -755,19 +818,24 @@ async def _seed_knowledge() -> None:
         )
 
 
+@traced("memory.backfill-embeddings")
 async def _backfill_embeddings(limit: int = 200) -> int:
     """Upgrade pre-v2 long-term records in one embedding batch."""
     store.ensure_ready()
-    rows = await store.memories.find(
-        {
-            "memory_type": {"$in": ["episodic", "semantic", "procedural"]},
-            "$or": [
-                {"embedding": {"$exists": False}},
-                {"embedding": None},
-                {"embedding_model": {"$ne": embeddings.model}},
-            ],
-        }
-    ).limit(limit).to_list()
+    rows = (
+        await store.memories.find(
+            {
+                "memory_type": {"$in": ["episodic", "semantic", "procedural"]},
+                "$or": [
+                    {"embedding": {"$exists": False}},
+                    {"embedding": None},
+                    {"embedding_model": {"$ne": embeddings.model}},
+                ],
+            }
+        )
+        .limit(limit)
+        .to_list()
+    )
     if not rows:
         return 0
     vectors = await embeddings.embed_many([str(row.get("content", "")) for row in rows])

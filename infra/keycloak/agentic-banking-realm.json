@@ -9,7 +9,10 @@
   "resetPasswordAllowed": true,
   "roles": {
     "realm": [
-      {"name": "bank_user", "description": "Retail banking customer"}
+      {
+        "name": "bank_user",
+        "description": "Retail banking customer"
+      }
     ]
   },
   "clients": [
@@ -21,8 +24,12 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost:3000/*"],
-      "webOrigins": ["http://localhost:3000"],
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:3000/*"
@@ -47,28 +54,40 @@
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "banking-agent", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "banking-agent",
+            "access.token.claim": "true"
+          }
         },
         {
           "name": "audience-abs-mcp",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "abs-mcp", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "abs-mcp",
+            "access.token.claim": "true"
+          }
         },
         {
           "name": "audience-bank-mcp-token-exchange",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "bank-mcp", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "bank-mcp",
+            "access.token.claim": "true"
+          }
         },
         {
           "name": "audience-abs-mcp-vulnerable",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "abs-mcp-vulnerable", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "abs-mcp-vulnerable",
+            "access.token.claim": "true"
+          }
         }
       ]
     },
@@ -87,21 +106,30 @@
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "memory-service", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "memory-service",
+            "access.token.claim": "true"
+          }
         },
         {
           "name": "audience-travel-agent",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "travel-agent", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "travel-agent",
+            "access.token.claim": "true"
+          }
         },
         {
           "name": "audience-duckduckgo-mcp",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "duckduckgo-mcp",
+            "access.token.claim": "true"
+          }
         }
       ]
     },
@@ -114,14 +142,19 @@
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
-      "attributes": {"standard.token.exchange.enabled": "true"},
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      },
       "protocolMappers": [
         {
           "name": "audience-abs-api",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "abs-api", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "abs-api",
+            "access.token.claim": "true"
+          }
         },
         {
           "name": "customer-id",
@@ -152,7 +185,10 @@
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "abs-api", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "abs-api",
+            "access.token.claim": "true"
+          }
         }
       ]
     },
@@ -167,11 +203,14 @@
       "serviceAccountsEnabled": true,
       "protocolMappers": [
         {
-          "name": "audience-duckduckgo-mcp",
+          "name": "audience-travel-duckduckgo-mcp",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "duckduckgo-mcp", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "travel-duckduckgo-mcp",
+            "access.token.claim": "true"
+          }
         }
       ]
     },
@@ -190,15 +229,44 @@
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
-          "config": {"included.client.audience": "memory-orchestrator", "access.token.claim": "true"}
+          "config": {
+            "included.client.audience": "memory-orchestrator",
+            "access.token.claim": "true"
+          }
         }
       ]
     },
-    {"clientId": "abs-api", "enabled": true, "bearerOnly": true},
-    {"clientId": "abs-mcp", "enabled": true, "bearerOnly": true},
-    {"clientId": "memory-service", "enabled": true, "bearerOnly": true},
-    {"clientId": "memory-orchestrator", "enabled": true, "bearerOnly": true},
-    {"clientId": "duckduckgo-mcp", "enabled": true, "bearerOnly": true}
+    {
+      "clientId": "abs-api",
+      "enabled": true,
+      "bearerOnly": true
+    },
+    {
+      "clientId": "abs-mcp",
+      "enabled": true,
+      "bearerOnly": true
+    },
+    {
+      "clientId": "memory-service",
+      "enabled": true,
+      "bearerOnly": true
+    },
+    {
+      "clientId": "memory-orchestrator",
+      "enabled": true,
+      "bearerOnly": true
+    },
+    {
+      "clientId": "duckduckgo-mcp",
+      "enabled": true,
+      "bearerOnly": true
+    },
+    {
+      "clientId": "travel-duckduckgo-mcp",
+      "enabled": true,
+      "bearerOnly": true,
+      "name": "Travel web search MCP"
+    }
   ],
   "users": [
     {
@@ -208,11 +276,21 @@
       "firstName": "Иван",
       "lastName": "Петров",
       "email": "ivan.petrov@example.test",
-      "attributes": {"customer_id": ["customer-001"]},
+      "attributes": {
+        "customer_id": [
+          "customer-001"
+        ]
+      },
       "credentials": [
-        {"type": "password", "value": "banking-demo", "temporary": false}
+        {
+          "type": "password",
+          "value": "banking-demo",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["bank_user"]
+      "realmRoles": [
+        "bank_user"
+      ]
     },
     {
       "username": "anna.sokolova",
@@ -221,11 +299,21 @@
       "firstName": "Анна",
       "lastName": "Соколова",
       "email": "anna.sokolova@example.test",
-      "attributes": {"customer_id": ["customer-002"]},
+      "attributes": {
+        "customer_id": [
+          "customer-002"
+        ]
+      },
       "credentials": [
-        {"type": "password", "value": "banking-demo", "temporary": false}
+        {
+          "type": "password",
+          "value": "banking-demo",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["bank_user"]
+      "realmRoles": [
+        "bank_user"
+      ]
     },
     {
       "username": "mikhail.orlov",
@@ -234,11 +322,21 @@
       "firstName": "Михаил",
       "lastName": "Орлов",
       "email": "mikhail.orlov@example.test",
-      "attributes": {"customer_id": ["customer-003"]},
+      "attributes": {
+        "customer_id": [
+          "customer-003"
+        ]
+      },
       "credentials": [
-        {"type": "password", "value": "banking-demo", "temporary": false}
+        {
+          "type": "password",
+          "value": "banking-demo",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["bank_user"]
+      "realmRoles": [
+        "bank_user"
+      ]
     },
     {
       "username": "elena.smirnova",
@@ -247,11 +345,21 @@
       "firstName": "Елена",
       "lastName": "Смирнова",
       "email": "elena.smirnova@example.test",
-      "attributes": {"customer_id": ["customer-004"]},
+      "attributes": {
+        "customer_id": [
+          "customer-004"
+        ]
+      },
       "credentials": [
-        {"type": "password", "value": "banking-demo", "temporary": false}
+        {
+          "type": "password",
+          "value": "banking-demo",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["bank_user"]
+      "realmRoles": [
+        "bank_user"
+      ]
     }
   ]
 }

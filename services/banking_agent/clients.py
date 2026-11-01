@@ -9,11 +9,12 @@ import httpx
 
 from services.common.auth import ServiceTokenProvider
 from services.common.llm import raise_upstream_llm_error
+from services.common.tracing import observation, traced
 
 
 class MemoryClient:
     def __init__(self, tokens: ServiceTokenProvider) -> None:
-        self.base_url = os.getenv("MEMORY_URL", "http://memory-service:8002")
+        self.base_url = os.getenv("MEMORY_URL", "http://memory-api:8002")
         self.tokens = tokens
         try:
             # Recall invokes the configured embedding provider.
@@ -29,6 +30,7 @@ class MemoryClient:
             "user_id": user_id,
             "query": query,
             "conversation_id": conversation_id,
+            "memory_types": ["episodic", "semantic", "procedural"],
             "limit_per_layer": max(1, min(limit, 20)),
         }
         result = await self._request("POST", "/api/v1/context", json=payload)
@@ -139,23 +141,34 @@ class MemoryClient:
             },
         )
 
+    @traced("memory.client.request")
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         token = await self.tokens.get()
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.request(
-                method,
-                f"{self.base_url}{path}",
-                headers={"Authorization": f"Bearer {token}"},
-                **kwargs,
-            )
-            raise_upstream_llm_error(response)
-            response.raise_for_status()
-            return response.json()
+        with observation(
+            "memory.http",
+            input={"method": method, "path": path, **kwargs},
+            metadata={"endpoint": self.base_url},
+        ) as span:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.request(
+                    method,
+                    f"{self.base_url}{path}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    **kwargs,
+                )
+                try:
+                    body = response.json()
+                except ValueError:
+                    body = response.text
+                span.update(output=body, metadata={"http_status": response.status_code})
+                raise_upstream_llm_error(response)
+                response.raise_for_status()
+                return body
 
 
 class TravelA2AClient:
     def __init__(self, tokens: ServiceTokenProvider) -> None:
-        self.base_url = os.getenv("TRAVEL_AGENT_URL", "http://travel-agent:8003")
+        self.base_url = os.getenv("TRAVEL_AGENT_URL", "http://travel-api:8003")
         self.tokens = tokens
         try:
             self.timeout = float(os.getenv("TRAVEL_HTTP_TIMEOUT_SECONDS", "180"))
@@ -163,6 +176,17 @@ class TravelA2AClient:
             self.timeout = 180.0
 
     async def plan(self, request: dict[str, Any], conversation_id: str) -> dict[str, Any]:
+        return await self._send(request, conversation_id)
+
+    async def mock_flight_source(
+        self, search: dict[str, Any], conversation_id: str
+    ) -> dict[str, Any]:
+        return await self._send(
+            {"request_type": "lab_flight_source", "search": search}, conversation_id
+        )
+
+    @traced("a2a.client.travel.send-message")
+    async def _send(self, request: dict[str, Any], conversation_id: str) -> dict[str, Any]:
         token = await self.tokens.get()
         payload = {
             "message": {
@@ -172,18 +196,23 @@ class TravelA2AClient:
                 "contextId": conversation_id,
             }
         }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.base_url}/a2a/v1/message:send",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/a2a+json",
-                    "Accept": "application/a2a+json",
-                    "A2A-Version": "1.0",
-                },
-            )
-            raise_upstream_llm_error(response)
-            response.raise_for_status()
-        body = response.json()
+        with observation("a2a.http", input=payload, metadata={"endpoint": self.base_url}) as span:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/a2a/v1/message:send",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/a2a+json",
+                        "Accept": "application/a2a+json",
+                        "A2A-Version": "1.0",
+                    },
+                )
+                try:
+                    body = response.json()
+                except ValueError:
+                    body = response.text
+                span.update(output=body, metadata={"http_status": response.status_code})
+                raise_upstream_llm_error(response)
+                response.raise_for_status()
         return body["message"]["parts"][0]["data"]

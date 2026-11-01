@@ -9,11 +9,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
-from fastapi import Depends, FastAPI, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 
 from services.common.auth import Principal, require_principal
-from services.common.tracing import observation
+from services.common.tracing import mcp_parent, observation, trace_headers, traced
 
 ToolHandler = Callable[[dict[str, Any], Principal], Awaitable[Any]]
 
@@ -48,7 +48,9 @@ def create_mcp_app(server_name: str, tools: list[MCPTool]) -> FastAPI:
 
     @app.post("/mcp", response_model=None)
     async def mcp_endpoint(
-        request: dict[str, Any], principal: Principal = Depends(require_principal)
+        request: dict[str, Any],
+        http_request: Request,
+        principal: Principal = Depends(require_principal),
     ) -> dict[str, Any] | Response:
         request_id = request.get("id")
         method = request.get("method")
@@ -82,30 +84,40 @@ def create_mcp_app(server_name: str, tools: list[MCPTool]) -> FastAPI:
         if not isinstance(arguments, dict):
             return _mcp_error(request_id, -32602, "Tool arguments must be an object")
 
-        with observation(
-            "mcp.tool.call",
-            input={"tool": name, "arguments": _redact(arguments)},
-            metadata={"server": server_name, "caller": principal.authorized_party},
-            user_id=principal.customer_id,
-            agent_id=server_name,
-        ) as span:
+        with (
+            mcp_parent(http_request.headers),
+            observation(
+                "mcp.tool.call",
+                as_type="tool",
+                input={"tool": name, "arguments": _redact(arguments)},
+                metadata={"server": server_name, "caller": principal.authorized_party},
+                user_id=principal.customer_id,
+                agent_id=server_name,
+            ) as span,
+        ):
             try:
                 result = tool.handler(arguments, principal)
                 if inspect.isawaitable(result):
                     result = await result
                 encoded = jsonable_encoder(result)
-                span.update(output={"tool": name, "ok": True})
+                span.update(output=encoded)
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
                     "result": {
-                        "content": [{"type": "text", "text": str(encoded)}],
+                        "content": [
+                            {"type": "text", "text": json.dumps(encoded, ensure_ascii=False)}
+                        ],
                         "structuredContent": encoded,
                         "isError": False,
                     },
                 }
             except (ValueError, KeyError) as exc:
-                span.update(output={"tool": name, "ok": False, "error": str(exc)})
+                span.update(
+                    output={"tool": name, "ok": False, "error": str(exc)},
+                    level="ERROR",
+                    status_message=str(exc),
+                )
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
@@ -140,11 +152,13 @@ class MCPClient:
         self.initialized = False
         self._init_lock = asyncio.Lock()
 
+    @traced("mcp.client.list-tools", as_type="tool")
     async def list_tools(self, bearer_token: str | None = None) -> list[dict[str, Any]]:
         await self._initialize(bearer_token)
         result = await self._request("tools/list", {}, bearer_token)
         return result["tools"]
 
+    @traced("mcp.client.call", as_type="tool")
     async def call(
         self, name: str, arguments: dict[str, Any], bearer_token: str | None = None
     ) -> Any:
@@ -166,6 +180,7 @@ class MCPClient:
         except json.JSONDecodeError:
             return {"text": text}
 
+    @traced("mcp.client.rpc")
     async def _request(
         self, method: str, params: dict[str, Any], bearer_token: str | None
     ) -> dict[str, Any]:
@@ -208,9 +223,7 @@ class MCPClient:
             notified.raise_for_status()
             self.initialized = True
 
-    async def _post(
-        self, payload: dict[str, Any], bearer_token: str | None
-    ) -> httpx.Response:
+    async def _post(self, payload: dict[str, Any], bearer_token: str | None) -> httpx.Response:
         headers = {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
@@ -221,12 +234,20 @@ class MCPClient:
             headers["Authorization"] = f"Bearer {bearer_token}"
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            return await client.post(
-                self.endpoint,
-                json=payload,
-                headers=headers,
+        with observation("mcp.http", input=payload, metadata={"endpoint": self.endpoint}) as span:
+            headers.update(trace_headers())
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(self.endpoint, json=payload, headers=headers)
+            try:
+                output = self._decode_response(response)
+            except (ValueError, KeyError):
+                output = response.text
+            span.update(
+                output=output,
+                metadata={"http_status": response.status_code},
+                **({"level": "ERROR"} if response.is_error else {}),
             )
+            return response
 
     @staticmethod
     def _decode_response(response: httpx.Response) -> dict[str, Any]:

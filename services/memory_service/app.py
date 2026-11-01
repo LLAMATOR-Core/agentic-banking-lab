@@ -11,7 +11,7 @@ from pymongo import ASCENDING, DESCENDING, ReturnDocument
 
 from services.common.auth import Principal, require_principal
 from services.common.llm import install_llm_error_handlers
-from services.common.tracing import observation
+from services.common.tracing import observation, public_trace_config, traced
 from services.memory_service.core import (
     EmbeddingClient,
     MemoryStore,
@@ -94,22 +94,25 @@ async def health() -> dict[str, Any]:
         "service": "memory-service",
         "mode": "working-write-and-read-only-long-term",
         "embeddings": embeddings.public_config(),
+        "observability": public_trace_config(),
     }
 
 
 @app.post("/api/v1/context")
+@traced("memory.api.enrich_context", system_boundary=True, agent_id="memory-service")
 async def enrich_context(payload: ContextRequest, _: Caller) -> dict[str, Any]:
     """Read-only context enrichment for agents; no long-term mutation is possible here."""
     store.ensure_ready()
-    vector = await embeddings.embed(payload.query)
     layers: dict[str, list[dict[str, Any]]] = {}
     with observation(
         "memory.context",
-        input={"types": payload.memory_types, "query_chars": len(payload.query)},
+        input=payload.model_dump(mode="json"),
         user_id=payload.user_id,
         session_id=payload.conversation_id,
-        agent_id=payload.agent_id,
+        agent_id="memory-service",
+        metadata={"client_agent_id": payload.agent_id},
     ) as span:
+        vector = await embeddings.embed(payload.query)
         for memory_type in ("episodic", "semantic", "procedural"):
             if memory_type not in payload.memory_types:
                 continue
@@ -139,7 +142,9 @@ async def enrich_context(payload: ContextRequest, _: Caller) -> dict[str, Any]:
         flattened = [
             item for memory_type in payload.memory_types for item in layers.get(memory_type, [])
         ]
-        span.update(output={key: len(value) for key, value in layers.items()})
+        span.update(
+            output={"layers": layers, "memories": flattened, "embedding_model": embeddings.model}
+        )
     return {"layers": layers, "memories": flattened, "embedding_model": embeddings.model}
 
 
@@ -162,6 +167,7 @@ async def _search_layer(
 
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}")
+@traced("memory.api.search_episodic", system_boundary=True, agent_id="memory-service")
 async def search_episodic(
     agent_id: str,
     user_id: str,
@@ -173,11 +179,13 @@ async def search_episodic(
 
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}/{episode_id}")
+@traced("memory.api.get_episode", system_boundary=True, agent_id="memory-service")
 async def get_episode(agent_id: str, user_id: str, episode_id: str, _: Caller) -> dict[str, Any]:
     return await _get_scoped(agent_id, user_id, "episodic", episode_id)
 
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}")
+@traced("memory.api.search_semantic", system_boundary=True, agent_id="memory-service")
 async def search_semantic(
     agent_id: str,
     user_id: str,
@@ -189,13 +197,13 @@ async def search_semantic(
 
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}/{semantic_id}")
-async def get_semantic(
-    agent_id: str, user_id: str, semantic_id: str, _: Caller
-) -> dict[str, Any]:
+@traced("memory.api.get_semantic", system_boundary=True, agent_id="memory-service")
+async def get_semantic(agent_id: str, user_id: str, semantic_id: str, _: Caller) -> dict[str, Any]:
     return await _get_scoped(agent_id, user_id, "semantic", semantic_id)
 
 
 @app.get("/api/v1/procedure/{agent_id}")
+@traced("memory.api.search_procedures", system_boundary=True, agent_id="memory-service")
 async def search_procedures(
     agent_id: str,
     _: Caller,
@@ -207,6 +215,7 @@ async def search_procedures(
 
 
 @app.get("/api/v1/procedure/{agent_id}/{procedure_id}")
+@traced("memory.api.get_procedure", system_boundary=True, agent_id="memory-service")
 async def get_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str, Any]:
     store.ensure_ready()
     try:
@@ -222,6 +231,7 @@ async def get_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str
 
 
 @app.post("/api/v1/working/turns", status_code=202)
+@traced("memory.api.store_conversation_turn", system_boundary=True, agent_id="memory-service")
 async def store_conversation_turn(payload: ConversationTurn, caller: Caller) -> dict[str, Any]:
     """Persist the current dialogue and queue it; no long-term memory is written here."""
     store.ensure_ready()
@@ -265,6 +275,7 @@ async def store_conversation_turn(payload: ConversationTurn, caller: Caller) -> 
 
 
 @app.post("/api/v1/working/candidates", status_code=202)
+@traced("memory.api.stage_candidate", system_boundary=True, agent_id="memory-service")
 async def stage_candidate(payload: WorkingCandidate, caller: Caller) -> dict[str, Any]:
     """Stage untrusted content in working memory for the next orchestrator collection."""
     store.ensure_ready()
@@ -317,6 +328,7 @@ async def stage_candidate(payload: WorkingCandidate, caller: Caller) -> dict[str
 
 
 @app.get("/api/v1/working/conversations/{agent_id}/{user_id}")
+@traced("memory.api.list_conversations", system_boundary=True, agent_id="memory-service")
 async def list_conversations(
     agent_id: str,
     user_id: str,
@@ -363,6 +375,7 @@ async def list_conversations(
 
 
 @app.get("/api/v1/working/{agent_id}/{user_id}/{conversation_id}")
+@traced("memory.api.conversation_messages", system_boundary=True, agent_id="memory-service")
 async def conversation_messages(
     agent_id: str, user_id: str, conversation_id: str, _: Caller
 ) -> dict[str, Any]:
@@ -394,6 +407,7 @@ async def conversation_messages(
 
 
 @app.post("/api/v1/working/actions")
+@traced("memory.api.create_action", system_boundary=True, agent_id="memory-service")
 async def create_action(payload: WorkingActionCreate, caller: Caller) -> dict[str, Any]:
     store.ensure_ready()
     now = datetime.now(UTC)
@@ -423,6 +437,7 @@ async def create_action(payload: WorkingActionCreate, caller: Caller) -> dict[st
 
 
 @app.get("/api/v1/working/actions/{action_id}")
+@traced("memory.api.get_action", system_boundary=True, agent_id="memory-service")
 async def get_action(
     action_id: str,
     _: Caller,
@@ -433,6 +448,7 @@ async def get_action(
 
 
 @app.patch("/api/v1/working/actions/{action_id}")
+@traced("memory.api.patch_action", system_boundary=True, agent_id="memory-service")
 async def patch_action(action_id: str, payload: WorkingActionPatch, _: Caller) -> dict[str, Any]:
     store.ensure_ready()
     try:

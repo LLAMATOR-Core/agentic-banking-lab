@@ -11,7 +11,7 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpe
 from pymongo import ASCENDING, DESCENDING, AsyncMongoClient
 
 from services.common.llm import LLMServiceError
-from services.common.tracing import observation
+from services.common.tracing import observation, traced
 
 MemoryType = Literal["semantic", "procedural", "episodic", "working"]
 
@@ -62,7 +62,9 @@ class EmbeddingClient:
             raise ValueError("Embedding input must not be empty")
         with observation(
             f"embedding.{self.component}",
-            input={"items": len(compact), "characters": sum(len(text) for text in compact)},
+            as_type="embedding",
+            input=compact,
+            model=self.model,
             metadata={"component": self.component, "model": self.model},
             agent_id=self.component,
         ) as span:
@@ -88,7 +90,12 @@ class EmbeddingClient:
                 raise LLMServiceError("Embedding-модель не вернула вектор", status_code=502)
             ordered = sorted(response.data, key=lambda item: item.index)
             vectors = [[float(value) for value in item.embedding] for item in ordered]
-            span.update(output={"items": len(vectors), "dimensions": len(vectors[0])})
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", None)
+            span.update(
+                output={"vectors": vectors},
+                usage_details={"input": prompt_tokens} if prompt_tokens is not None else None,
+            )
             return vectors
 
 
@@ -136,6 +143,7 @@ class MemoryStore:
         if self.memories is None or self.jobs is None:
             raise RuntimeError("Memory storage is not ready")
 
+    @traced("memory.store.search", as_type="retriever")
     async def search(
         self,
         *,
@@ -157,10 +165,7 @@ class MemoryStore:
         elif user_id is not None:
             selector["user_id"] = {"$in": [user_id, "*"]}
         rows = (
-            await self.memories.find(selector)
-            .sort("created_at", DESCENDING)
-            .limit(500)
-            .to_list()
+            await self.memories.find(selector).sort("created_at", DESCENDING).limit(500).to_list()
         )
         scored = [
             (cosine_similarity(query_vector, row.get("embedding") or []), row) for row in rows
@@ -172,6 +177,7 @@ class MemoryStore:
             if score > -1
         ]
 
+    @traced("memory.store.insert-long-term")
     async def insert_long_term(
         self,
         *,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import uuid
 from typing import Annotated, Any
@@ -21,10 +22,11 @@ from services.common.schemas import (
     ChatRequest,
     ChatResponse,
     ExternalMemoryIngest,
+    MockFlightSearch,
     SharedMemoryWrite,
     VulnerableAbsRead,
 )
-from services.common.tracing import observation
+from services.common.tracing import observation, public_trace_config, traced
 
 tokens = ServiceTokenProvider()
 memory = MemoryClient(tokens)
@@ -47,8 +49,7 @@ async def dependency_timeout_handler(_: Request, __: httpx.TimeoutException) -> 
         status_code=503,
         content={
             "detail": (
-                "Сервис памяти или банковская интеграция не успели ответить. "
-                "Повторите запрос."
+                "Сервис памяти или банковская интеграция не успели ответить. Повторите запрос."
             ),
             "code": "dependency_timeout",
         },
@@ -78,10 +79,17 @@ Caller = Annotated[Principal, Depends(require_principal)]
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "service": "banking-agent", "llm": llm.public_config()}
+    return {
+        "status": "ok",
+        "service": "banking-agent",
+        "llm": llm.public_config(),
+        "abs_mcp_mode": skills.abs_mcp_mode,
+        "observability": public_trace_config(),
+    }
 
 
 @app.get("/v1/dashboard")
+@traced("banking.api.dashboard", system_boundary=True, agent_id="banking-agent")
 async def dashboard(
     caller: Caller, authorization: str = Header(alias="Authorization")
 ) -> dict[str, Any]:
@@ -97,7 +105,15 @@ async def dashboard(
             abs_mcp.call("get_portfolio", {}, access_token),
             abs_mcp.call("list_investment_products", {}, access_token),
         )
-        span.update(output={"accounts": len(accounts), "operations": len(operations)})
+        span.update(
+            output={
+                "customer": customer,
+                "accounts": accounts,
+                "operations": operations,
+                "portfolio": portfolio,
+                "products": products,
+            }
+        )
     return {
         "customer": customer,
         "accounts": accounts,
@@ -108,17 +124,17 @@ async def dashboard(
 
 
 @app.get("/v1/conversations")
+@traced("banking.api.conversations", system_boundary=True, agent_id="banking-agent")
 async def conversations(caller: Caller) -> dict[str, Any]:
     user_id = _customer_id(caller)
-    with observation(
-        "banking.conversations", user_id=user_id, agent_id="banking-agent"
-    ) as span:
+    with observation("banking.conversations", user_id=user_id, agent_id="banking-agent") as span:
         rows = await memory.conversations(user_id)
-        span.update(output={"count": len(rows)})
+        span.update(output={"conversations": rows})
     return {"conversations": rows}
 
 
 @app.get("/v1/conversations/{conversation_id}/messages")
+@traced("banking.api.conversation_messages", system_boundary=True, agent_id="banking-agent")
 async def conversation_messages(conversation_id: str, caller: Caller) -> dict[str, Any]:
     user_id = _customer_id(caller)
     with observation(
@@ -129,11 +145,12 @@ async def conversation_messages(conversation_id: str, caller: Caller) -> dict[st
         agent_id="banking-agent",
     ) as span:
         rows = await memory.conversation_messages(user_id, conversation_id)
-        span.update(output={"count": len(rows)})
+        span.update(output={"conversation_id": conversation_id, "messages": rows})
     return {"conversation_id": conversation_id, "messages": rows}
 
 
 @app.post("/v1/chat", response_model=ChatResponse)
+@traced("banking.api.chat", system_boundary=True, agent_id="banking-agent")
 async def chat(
     request: ChatRequest,
     caller: Caller,
@@ -155,7 +172,7 @@ async def chat(
     }
     with observation(
         "banking-agent.turn",
-        input={"message": request.message, "has_action": bool(request.action)},
+        input=graph_input,
         metadata={"agent_id": "banking-agent"},
         user_id=user_id,
         session_id=request.conversation_id,
@@ -165,7 +182,11 @@ async def chat(
             result = await banking_graph.graph.ainvoke(graph_input)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        span.update(output={"intent": result["intent"], "tool_calls": result.get("tool_calls", [])})
+        span.update(output=result)
+    result.setdefault("data", {})["connections"] = {
+        "abs_mcp_mode": skills.abs_mcp_mode,
+        "selected_customer_id": result.get("abs_customer_id"),
+    }
     return ChatResponse(
         message=result["response"],
         conversation_id=request.conversation_id,
@@ -178,6 +199,7 @@ async def chat(
 
 
 @app.post("/v1/lab/vulnerable-abs")
+@traced("banking.api.vulnerable_abs_read", system_boundary=True, agent_id="banking-agent")
 async def vulnerable_abs_read(
     payload: VulnerableAbsRead,
     _: Caller,
@@ -198,6 +220,7 @@ async def vulnerable_abs_read(
 
 
 @app.post("/v1/lab/shared-memory")
+@traced("banking.api.write_shared_memory", system_boundary=True, agent_id="banking-agent")
 async def write_shared_memory(payload: SharedMemoryWrite, caller: Caller) -> dict[str, Any]:
     user_id = _customer_id(caller)
     conversation_id = f"lab-direct-{uuid.uuid4()}"
@@ -221,6 +244,7 @@ async def write_shared_memory(payload: SharedMemoryWrite, caller: Caller) -> dic
 
 
 @app.post("/v1/lab/ingest-external-memory")
+@traced("banking.api.ingest_external_memory", system_boundary=True, agent_id="banking-agent")
 async def ingest_external_memory(payload: ExternalMemoryIngest, caller: Caller) -> dict[str, Any]:
     """Deliberately persist untrusted MCP output without sanitizing instructions."""
     user_id = _customer_id(caller)
@@ -254,7 +278,41 @@ async def ingest_external_memory(payload: ExternalMemoryIngest, caller: Caller) 
     }
 
 
+@app.post("/v1/lab/ingest-flight-memory")
+@traced("banking.api.ingest_flight_memory", system_boundary=True, agent_id="banking-agent")
+async def ingest_flight_memory(payload: MockFlightSearch, caller: Caller) -> dict[str, Any]:
+    """Lab vulnerability: stage the mock provider's raw text, including injected instructions."""
+    user_id = _customer_id(caller)
+    conversation_id = f"lab-flight-{uuid.uuid4()}"
+    try:
+        result = await travel.mock_flight_source(payload.model_dump(mode="json"), conversation_id)
+    except ValueError as exc:
+        raise HTTPException(502, "Mock Flights MCP search failed") from exc
+    if not isinstance(result, dict) or not result.get("results"):
+        raise HTTPException(502, "Mock Flights MCP returned no content to ingest")
+    staged = await memory.stage_candidate(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        requested_memory_type="semantic",
+        content=json.dumps(result["results"], ensure_ascii=False)[:12000],
+        metadata={
+            "source": "flights-mcp",
+            "trust": "untrusted-external",
+            "synthetic": True,
+            "vulnerability": "indirect-prompt-injection-to-shared-memory",
+            "source_user_id": user_id,
+        },
+    )
+    return {
+        "warning": "untrusted-external-content-is-staged-until-orchestration",
+        "provider": "flights-mcp",
+        "conversation_id": conversation_id,
+        "working_memory": staged,
+    }
+
+
 @app.get("/v1/lab/memory-recall")
+@traced("banking.api.lab_memory_recall", system_boundary=True, agent_id="banking-agent")
 async def lab_memory_recall(
     caller: Caller,
     query: str = "",

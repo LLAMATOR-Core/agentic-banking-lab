@@ -11,7 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from services.common.auth import Principal, require_principal
 from services.common.llm import install_llm_error_handlers
-from services.common.tracing import observation
+from services.common.schemas import MockFlightSearch
+from services.common.tracing import observation, public_trace_config, traced
 from services.travel_agent.graph import travel_graph
 
 
@@ -62,6 +63,18 @@ class MockBookingRequest(BaseModel):
         return self
 
 
+class LabFlightSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_type: Literal["lab_flight_source"]
+    search: MockFlightSearch
+
+
+class A2AMockBookingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_type: Literal["mock_booking"]
+    booking: MockBookingRequest
+
+
 app = FastAPI(title="Partner Travel Agent", version="0.1.0")
 install_llm_error_handlers(app)
 Caller = Annotated[Principal, Depends(require_principal)]
@@ -72,6 +85,8 @@ async def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "travel-agent",
+        "flight_provider": travel_graph.flight_provider,
+        "observability": public_trace_config(),
         "llm": travel_graph.llm.public_config(),
     }
 
@@ -82,7 +97,7 @@ async def agent_card() -> dict[str, Any]:
     return {
         "name": "Bank Partner Travel Agent",
         "description": (
-            "LLM agent combining live Booking and synthetic Flights MCP data, local mock booking, "
+            "LLM agent combining Tutu or mock flight searches, local mock booking, "
             "and recommendations."
         ),
         "supportedInterfaces": [
@@ -94,7 +109,6 @@ async def agent_card() -> dict[str, Any]:
         ],
         "provider": {"organization": "Bank partner", "url": base_url},
         "version": "0.1.0",
-        "documentationUrl": f"{base_url}/docs",
         "capabilities": {"streaming": False, "pushNotifications": False},
         "securitySchemes": {
             "keycloakOAuth": {
@@ -113,12 +127,22 @@ async def agent_card() -> dict[str, Any]:
         "defaultOutputModes": ["application/json"],
         "skills": [
             {
+                "id": "lab-flight-source",
+                "name": "Read a laboratory flight source",
+                "description": (
+                    "Returns the controlled mock MCP response over A2A for memory experiments."
+                ),
+                "tags": ["lab", "flights"],
+                "inputModes": ["application/json"],
+                "outputModes": ["application/json"],
+            },
+            {
                 "id": "plan-trip",
                 "name": "Plan a trip",
                 "description": (
-                    "Combines synthetic Flights and live Booking MCP results with recommendations."
+                    "Combines Tutu flights with destination recommendations; lab mock optional."
                 ),
-                "tags": ["travel", "flights", "accommodation"],
+                "tags": ["travel", "flights", "destinations"],
                 "inputModes": ["application/json"],
                 "outputModes": ["application/json"],
             },
@@ -129,12 +153,13 @@ async def agent_card() -> dict[str, Any]:
                 "tags": ["travel", "booking", "mock"],
                 "inputModes": ["application/json"],
                 "outputModes": ["application/json"],
-            }
+            },
         ],
     }
 
 
 @app.post("/v1/bookings/mock")
+@traced("travel.api.create_mock_booking", agent_id="travel-agent")
 async def create_mock_booking(payload: MockBookingRequest, caller: Caller) -> dict[str, Any]:
     booking_id = f"mock-{uuid.uuid4()}"
     result = {
@@ -158,6 +183,7 @@ async def create_mock_booking(payload: MockBookingRequest, caller: Caller) -> di
 
 
 @app.post("/a2a/v1/message:send")
+@traced("travel.api.send_message", system_boundary=True, agent_id="travel-agent")
 async def send_message(
     payload: dict[str, Any],
     caller: Caller,
@@ -172,7 +198,13 @@ async def send_message(
         data_parts = [
             part["data"] for part in message["parts"] if isinstance(part.get("data"), dict)
         ]
-        trip = TripRequest.model_validate(data_parts[0])
+        request = data_parts[0]
+        kind = request.get("request_type")
+        schema = {
+            "lab_flight_source": LabFlightSourceRequest,
+            "mock_booking": A2AMockBookingRequest,
+        }.get(kind, TripRequest)
+        trip = schema.model_validate(request)
     except (KeyError, IndexError, ValueError) as exc:
         raise HTTPException(422, f"Invalid A2A SendMessage request: {exc}") from exc
 
@@ -182,20 +214,21 @@ async def send_message(
         "a2a.travel.send-message",
         input=safe_input,
         metadata={"protocol": "A2A", "version": a2a_version, "caller": caller.authorized_party},
-        user_id=trip.user_id,
+        user_id=getattr(trip, "user_id", None),
         session_id=message.get("contextId"),
         agent_id="travel-agent",
     ) as span:
-        state = await travel_graph.graph.ainvoke({"request": safe_input})
-        result = state["result"]
-        result["tool_calls"] = state["tool_calls"]
-        span.update(
-            output={
-                "flight_links": len(result["flights"]),
-                "hotel_links": len(result["accommodations"]),
-                "tools": state["tool_calls"],
-            }
-        )
+        if kind == "lab_flight_source":
+            result = await travel_graph.mock_flights.call("search_flights", safe_input["search"])
+            result["tool_calls"] = ["flights.search_flights"]
+        elif kind == "mock_booking":
+            result = await create_mock_booking(trip.booking, caller)
+            result["tool_calls"] = ["travel.mock-booking"]
+        else:
+            state = await travel_graph.graph.ainvoke({"request": safe_input})
+            result = state["result"]
+            result["tool_calls"] = state["tool_calls"]
+        span.update(output=result)
 
     response = {
         "message": {
