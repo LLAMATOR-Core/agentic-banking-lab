@@ -151,7 +151,7 @@ Data plane создаёт embedding запроса, сначала примен�
 самих промптов: `conversation_messages`, `memory_records`, `memory_layers`,
 `has_customer_profile`, `current_date`, `timezone`.
 
-Read API, доступный Banking Agent:
+Read API, доступный сервису Banking Agent:
 
 | Метод | Назначение |
 |---|---|
@@ -170,7 +170,7 @@ Read API, доступный Banking Agent:
 1. по расписанию с интервалом `MEMORY_ORCHESTRATION_INTERVAL_SECONDS` из `.env`:
    по умолчанию 1800 секунд; для короткого опыта можно поставить `10`, а `0`
    отключает периодический запуск;
-2. операторский `POST /api/v1/orchestrator/collect` либо
+2. оркестрационный `POST /api/v1/orchestrator/collect` либо
    `POST /api/v1/episodic/agent/collect/{thread_id}`.
 
 Ручной запрос работает при любом режиме расписания и дожидается результата обработки.
@@ -193,7 +193,7 @@ Read API, доступный Banking Agent:
 Agent. Data plane намеренно оставляет только user-scoped episodic/semantic чтение, чтобы
 runtime-токен не превращался в cross-user administrative credential.
 
-Mutation API существует только на control plane:
+API с изменяющими операциями существует только на control plane:
 
 | Метод | Назначение |
 |---|---|
@@ -222,9 +222,9 @@ curl -fsS http://localhost:8004/api/v1/orchestrator/collect \
 
 ## Отравление памяти
 
-`POST /v1/lab/shared-memory` и `/v1/lab/ingest-external-memory` больше не пишут долгосрочный
+`POST /v1/lab/shared-memory` и `/v1/lab/ingest-external-memory` не пишут долгосрочный
 слой напрямую. Они сохраняют недоверенный working candidate; затем только оркестратор может
-promote его. Для direct и indirect poisoning-эксперимента после staging дождитесь scheduler
+переместить его в другие словы. Для poisoning-эксперимента после staging дождитесь scheduler
 или вызовите collection операторским токеном.
 
 Provenance (`source_user_id`, `source`, `trust`, `derived_from_job`) сохраняется, но учебный
