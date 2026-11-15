@@ -1,58 +1,98 @@
 # Многоуровневая память
 
-Здесь описаны форматы, слои, API и обработка записей. Архитектура подсистемы и
-аналитика маршрутов находятся в [MEMORY_SYSTEM.md](MEMORY_SYSTEM.md), общая модель
-угроз — в [SECURITY.md](SECURITY.md).
+Форматы записей и API памяти. Состав сервисов описан в
+[MEMORY_SYSTEM.md](MEMORY_SYSTEM.md), угрозы в [SECURITY.md](SECURITY.md).
 
-Система персистентной памяти отделена от банковской и travel-систем сетями и
-проектом Langfuse `Persistent Memory`. Внутри неё два HTTP-сервиса над одной MongoDB. Область записи задают
-обязательные `agent_id` и `user_id`; дополнительный идентификатор области не используется.
+В системе памяти два HTTP-сервиса над одной MongoDB:
 
-- `memory-service :8002` — data plane, доступный `banking-agent`. Он хранит текущий диалог,
-  pending actions и кандидаты из внешних источников, а долгосрочные слои только читает.
-- `memory-orchestrator :8004` — control plane с отдельной identity `memory-operator`. Это
-  LLM-агент, который единолично создаёт и изменяет episodic, semantic и procedural память.
+| Сервис | Назначение |
+|---|---|
+| `memory-service:8002` | История, ожидающие денежные действия и кандидаты; чтение долговременной памяти |
+| `memory-orchestrator:8004` | LLM-перенос кандидатов и операторское управление долговременными записями |
 
-Банк обращается только к шлюзу `memory-api :8002`. Через него недоступны MongoDB
-и операторский API оркестратора. Внутренние `memory-service` и `memory-orchestrator`
-принадлежат системе памяти, а не банковскому агенту.
+Банк обращается к `memory-service` через шлюз `memory-api:8002`. Шлюз не пропускает
+операторские методы. Клиент `memory-operator` управляет памятью через порт 8004.
+У банка и его трёх навыков нет токена с `aud=memory-orchestrator`.
+Внешний `travel-agent` память не читает; её использует банковский `travel-skill`.
+У системы памяти своя сеть, приёмник Langfuse и ключи проекта `Persistent Memory`.
 
-Среди предметных агентов к API памяти подключён только банковский. Тревел-агент
-не хранит здесь свою историю или воспоминания. Подключение второй системы требует
-контракта контекста, отдельной идентичности и проверки областей доступа;
-эта работа включена в [примерный план курса](COURSE_PLAN.md).
+## Области и авторизация навыков
 
-У токена Banking Agent audience `memory-service`; audience `memory-orchestrator` у него нет.
-Поэтому prompt или tool choice банковской LLM не может напрямую вызвать promotion, удалить
-запись либо изменить процедуру.
+API `/api/v1/skills/*` принимает JWT с `memory.access`, `aud=memory-service`
+и `azp` одного из трёх навыков. Сервер определяет клиента по `customer_id`, область
+по `SKILL_MEMORY_MODE`. Поля `agent_id` и `user_id` в запросе запрещены схемой.
+
+| Режим/данные | `agent_id` | `user_id` |
+|---|---|---|
+| Долговременная память `shared` | `skills.shared` | Клиент из JWT |
+| Долговременная память `isolated` | `skills.<identity>` | Клиент из JWT |
+| История навыка в любом режиме | `skills.history.<identity>` | Клиент из JWT; дополнительно `conversation_id` |
+| Интерфейс банка и граф `legacy` | `banking-agent` | Задаётся допущенным банковским сервисом |
+
+Вместо `<identity>` используются `operations-skill`, `investment-skill` или
+`travel-skill`. Переключение `SKILL_MEMORY_MODE` меняет область без удаления записей.
+В `skills.*` поиск не включает `user_id="*"`, перенос всех типов сохраняет клиента.
+Прежняя межклиентская общая область и межагентная память одного клиента разделены.
+
+Общее тело запросов навыка:
+
+```json
+{
+  "conversation_id": "session-001",
+  "experiment": {"experiment_id": "least-privilege", "run_id": "run-001"},
+  "query": "Проанализируй портфель"
+}
+```
+
+| Метод | Дополнительные поля | Результат |
+|---|---|---|
+| `POST /api/v1/skills/context` | Нет | `layers`, `memories`, `embedding_model`, `memory_mode` |
+| `POST /api/v1/skills/candidates` | `content` до 12 000 символов, `source` | `working_memory_id`, `candidate_id`, `migration.job_id`; HTTP 202 |
+| `POST /api/v1/skills/history` | Нет | Реплики навыка, клиента и диалога; последнее `travel_state` |
+| `POST /api/v1/skills/turns` | `assistant_message`, необязательный `travel_state` | Две реплики без задания переноса; `turn_id`, `messages`; HTTP 202 |
+
+Допустимые `source`: `bank-profile`, `bank-accounts`, `bank-operations`,
+`bank-statement`, `bank-portfolio`, `bank-products`, `internet`, `travel-partner`,
+`skill-answer`. Источник заявляет навык; сервер добавляет проверенные `writer_agent`
+и клиента, режим памяти и метки опыта. Эти метки не подтверждают достоверность текста.
+Навыкам запрещены прежние маршруты памяти, включая чтение произвольной записи по ID.
+
+Контекст содержит до восьми записей каждого долговременного слоя. История читается
+отдельно, полностью. В `shared` право на межагентную публикацию не проверяется;
+в `isolated` сервер разделяет области. Избирательная публикация общих знаний
+не реализована.
 
 ## Слои
 
-| Слой | Назначение | Scope и retention |
+| Слой | Назначение | Область и срок хранения |
 |---|---|---|
-| `working` | точные реплики текущих и прежних диалогов; кандидаты; pending actions | конкретные `agent_id`, `user_id`, `conversation_id`; action TTL |
-| `episodic` | устойчивые факты и предпочтения текущего пользователя | конкретные `agent_id`, `user_id` |
-| `semantic` | знания агента о среде | в учебном poisoning-сценарии `user_id="*"` |
-| `procedural` | способы выполнения задач и навыки | agent-wide, `user_id="*"` |
+| `working` | Реплики, кандидаты, ожидающие действия | `agent_id`, `user_id`, `conversation_id`; срок действия денежных заявок |
+| `episodic` | Устойчивые факты и предпочтения пользователя | `agent_id`, `user_id` |
+| `semantic` | Знания о среде | `skills.*`: конкретный клиент; прежняя область: `user_id="*"` |
+| `procedural` | Способы выполнения задач | `skills.*`: конкретный клиент; прежние процедуры: `user_id="*"` |
 
-`user_id="*"` — намеренная общая область лаборатории. Она позволяет исследовать cross-user
-memory poisoning. В production такие записи должны проходить
-модерацию и быть read-only для runtime-агента.
+Общая область `user_id="*"` сохранена для лабораторий `banking-agent`, в том числе
+для опытов с межклиентским отравлением памяти. Для промышленной общей публикации
+нужны модерация и запрет её изменения прикладным агентом.
 
 ## Схема записи
 
 ```json
 {
   "id": "Mongo ObjectId",
-  "agent_id": "banking-agent",
+  "agent_id": "skills.shared",
   "user_id": "customer-001",
-  "memory_type": "episodic",
+  "memory_type": "semantic",
   "content": "Пользователь живёт в Тбилиси",
   "conversation_id": null,
   "metadata": {
     "source": "memory-orchestrator",
     "source_user_id": "customer-001",
-    "derived_from_turn": "uuid",
+    "writer_agent": "operations-skill",
+    "origin_source": "bank-operations",
+    "derived_from_job": "Mongo job ID",
+    "experiment_id": "least-privilege",
+    "run_id": "run-001",
     "trust": "untrusted-user-derived",
     "scope": "user",
     "decay_score": 1.0
@@ -66,150 +106,155 @@ memory poisoning. В production такие записи должны прохо�
 }
 ```
 
-Embedding хранится в MongoDB, но никогда не возвращается агенту или API-клиенту. Все записи
-содержат `agent_id`, `user_id`, provenance и время. История чата сохраняет две working-записи
-на turn: точный текст пользователя и точный ответ ассистента, связанные `turn_id` и
-`conversation_id`.
+Вектор хранится в MongoDB и не возвращается агенту или API-клиенту.
+Запись содержит `agent_id`, `user_id`, сведения об источнике и время.
+Пара реплик хранится двумя записями `working` с общими `turn_id` и `conversation_id`.
 
-## Working memory и сессии
+## Working memory и сессии банковского интерфейса
 
-После успешного ответа Banking Agent вызывает `POST /api/v1/working/turns`. Сервис сохраняет
-две реплики и ставит `memory_job` со статусом `pending`; HTTP-ответ не ждёт оркестратор. UI
-получает список сессий и может вернуться к любой из них через API Banking Agent, который
-всегда подставляет `user_id` из проверенного JWT.
+После успешного ответа банк вызывает `POST /api/v1/working/turns`. API сохраняет
+две реплики и ставит задание `memory_job` в `pending`; HTTP-ответ не ждёт обработки.
+Интерфейс позволяет вернуться к сохранённому диалогу. Банковский API подставляет
+`user_id` из проверенного JWT.
 
-Pending financial action тоже является working memory, но не сообщением. В его metadata
-хранятся канонические параметры, статус и результат. На подтверждении повторно проверяются
-`agent_id`, `user_id`, status и TTL; идентификатор записи служит idempotency key.
+Ожидающее денежное действие тоже хранится в `working`. Его метаданные содержат
+канонические параметры, статус и результат. При подтверждении код повторно
+проверяет `agent_id`, `user_id`, статус и срок действия; ID записи служит ключом
+идемпотентности. Такое действие не ставится в очередь как реплика.
 
-Основные методы data plane:
+Эти методы доступны сервису `banking-agent`, но не трём навыкам:
 
 | Метод | Назначение |
 |---|---|
-| `POST /api/v1/working/turns` | сохранить пару user/assistant и поставить job |
-| `POST /api/v1/working/candidates` | сохранить недоверенный кандидат из user/web/MCP и поставить job |
-| `GET /api/v1/working/conversations/{agent_id}/{user_id}` | список диалогов пользователя |
-| `GET /api/v1/working/{agent_id}/{user_id}/{conversation_id}` | реплики выбранного диалога |
-| `POST/GET/PATCH /api/v1/working/actions...` | lifecycle pending action |
+| `POST /api/v1/working/turns` | Сохранить реплики и поставить задание |
+| `POST /api/v1/working/candidates` | Сохранить недоверенный кандидат и поставить задание |
+| `GET /api/v1/working/conversations/{agent_id}/{user_id}` | Список диалогов |
+| `GET /api/v1/working/{agent_id}/{user_id}/{conversation_id}` | Реплики диалога |
+| `GET /api/v1/working/routing/{user_id}/{conversation_id}` | Последний навык для маршрутизации |
+| `POST/GET/PATCH /api/v1/working/actions...` | Создание, чтение и изменение ожидающего действия |
 
 ## Semantic search
 
-И data plane, и control plane используют официальный `openai` SDK:
+Сервисы чтения и записи используют SDK `openai`: `OPENAI_BASE_URL`,
+`OPENAI_API_KEY`, `EMBEDDING_MODEL` (по умолчанию `text-embedding-3-small`).
+`OPENAI_MODEL` задаёт LLM оркестратора. Параметры провайдера каждой системы
+могут переопределять общие значения; см. [CONFIGURATION.md](CONFIGURATION.md#llm-и-эмбеддинги).
 
-- `OPENAI_BASE_URL` — общий OpenAI-compatible endpoint для LLM и embeddings;
-- `OPENAI_API_KEY` — ключ этого endpoint;
-- `EMBEDDING_MODEL` — отдельная модель embeddings, по умолчанию
-  `text-embedding-3-small`;
-- `OPENAI_MODEL` — LLM оркестратора.
+Оркестратор создаёт вектор при долговременной записи и дополняет векторы старых
+записей. При поиске API сначала фильтрует `agent_id`, `user_id`, тип и срок действия,
+затем ранжирует до 500 последних кандидатов каждого слоя по косинусному сходству.
+При недоступной модели эмбеддингов API возвращает `502/503`; подмены поиском
+по ключевым словам нет.
 
-Оркестратор создаёт embedding при каждой долгосрочной записи и backfill для прежних записей.
-Data plane создаёт embedding запроса, сначала применяет обязательные фильтры
-`agent_id`/`user_id`/type/TTL, затем вычисляет cosine similarity по ограниченному набору
-кандидатов. Лексического или детерминированного fallback нет: недоступная embedding-модель
-даёт явный `502/503`.
+## Контекст LLM навыков
+
+В режиме `orchestrator` маршрутизатор видит сообщение, наличие параметров `travel`
+и предыдущий навык. Он не загружает профиль или долговременную память.
+Выбранный агент получает личную историю, `memory_context` и результаты инструментов:
+банковский аналитик читает профиль, счета, операции, выписку, портфель и продукты;
+инвестиционный агент читает портфель и новости; `travel-skill` вызывает партнёра.
+
+До первичного выбора история интерфейса не передаётся маршрутизатору. После выбора
+оркестратор читает историю текущего диалога и собирает результаты исполнителей
+для итогового ответа. Он может вызвать дополнительных агентов; каждый получает
+исходное сообщение пользователя и собственный контекст, без результатов коллег.
+Объединение данных в оркестраторе не зависит от `SKILL_MEMORY_MODE`.
+
+Реплики навыка не создают
+заданий переноса, результаты инструментов создают. Реплики интерфейса по-прежнему
+ставятся в очередь области `banking-agent`; её записи недоступны API навыков.
 
 ## Контекст банковского LLM
 
-В начале каждого turn Banking Agent параллельно получает:
+Этот раздел относится к `BANKING_AGENT_MODE=legacy`. Перед каждым ответом банк
+параллельно получает:
 
-- профиль через secure MCP `get_customer_info` с пользовательским JWT; `id` профиля
-  обязан совпадать с аутентифицированным клиентом;
-- всю сохранённую историю `user`/`assistant` текущего `conversation_id` с фильтрами
-  `agent_id=banking-agent`, `user_id=<текущий клиент>` и хронологическим порядком;
-- semantic recall долгосрочных слоёв `episodic`, `semantic`, `procedural`: по 8 записей
-  каждого слоя, до 24 суммарно. Это релевантная выборка с действующими scope/TTL filters,
-  а не выгрузка всей MongoDB. Поиск ранжирует до 500 последних кандидатов каждого слоя.
+- профиль через защищённый MCP; его ID должен совпадать с клиентом JWT;
+- полную историю текущего диалога `banking-agent` в хронологическом порядке;
+- до восьми записей каждого из слоёв `episodic`, `semantic`, `procedural`,
+  до 24 суммарно, с фильтрами области и срока действия.
 
-Все банковские LLM-шаги (`route_intent`, `extract_travel_request`, `compose_response`,
-а в уязвимой сборке также `select_abs_customer`)
-получают единый JSON-контекст: `current_date`, `current_datetime`, `timezone`,
-`customer_profile`, `conversation_history`, `memory_context`. Снимок даты/времени
-делается на каждый turn в `BANK_TIMEZONE` (по умолчанию `Europe/Moscow`) и сохраняется
-между его LLM-шагами. Базовый профиль содержит только `full_name`, `gender`,
-`client_type`, `vip`; токен, телефон и email туда не включаются. Профиль не кэшируется
-между пользователями. Если пользователь явно запросил профиль, его результат навыка
-может содержать контактные поля как обычные данные АБС.
+Шаги `route_intent`, `extract_travel_request`, `compose_response` и, в уязвимом
+режиме, `select_abs_customer` получают единый контекст: `current_date`,
+`current_datetime`, `timezone`, `customer_profile`, `conversation_history`,
+`memory_context`. Время фиксируется один раз на запрос в `BANK_TIMEZONE`
+(по умолчанию `Europe/Moscow`).
 
-История передаётся полностью в `conversation_history`, без лимита последних N сообщений.
-Новое сообщение передаётся отдельно в `user_message`, а после ответа обе новые реплики
-сохраняются в working memory. Контексты разных сессий не объединяются; между сессиями
-действует только долгосрочный recall. `memory_context` сохраняет содержимое **всех**
-выбранных записей без дополнительного общего лимита 8 и без обрезки до 1500 символов;
-`source`/`trust` остаются видны модели. Working memory не дублируется в recall, потому
-что история уже получена отдельным полным чтением.
+Базовый профиль содержит `full_name`, `gender`, `client_type`, `vip`.
+Телефон, email и JWT в него не входят; кэша профилей между пользователями нет.
+Явный запрос профиля может вернуть контактные поля как результат инструмента АБС.
 
-На шаге ответа LLM дополнительно получает `trusted_skill_draft` и `skill_data` с
-результатами навыка. Полная история, профиль и память банковского агента не передаются
-партнёрскому Travel Agent или внешним поисковым MCP. Лимит контекстного окна остаётся
-ограничением выбранной модели: приложение не сокращает историю молча; ошибка провайдера
-возвращается как явная ошибка LLM.
+Новое сообщение передаётся в `user_message`, после ответа сохраняются обе реплики.
+Истории разных диалогов не объединяются; между ними доступна долговременная память.
+В `memory_context` сохраняется полный текст всех выбранных записей с `source`
+и `trust`, без дополнительного общего лимита в восемь записей и обрезки до
+1500 символов. `working` не дублируется в этом контексте.
 
-Проверка `tests/test_agent_context.py` перехватывает HTTP-запросы OpenAI SDK во время
-полного запуска банковского графа и проверяет 40 реплик, 24 длинных воспоминания из трёх
-слоёв, персонализацию, дату на границе суток UTC/Москва и отсутствие JWT/контактов в
-базовом контексте. Счётчики в Langfuse позволяют сверять объём контекста без записи
-самих промптов: `conversation_messages`, `memory_records`, `memory_layers`,
-`has_customer_profile`, `current_date`, `timezone`.
+На шаге ответа LLM также получает `trusted_skill_draft` и `skill_data`.
+Полная история, профиль и память не передаются партнёру или поисковым MCP.
+Приложение не сокращает историю при переполнении контекстного окна: ошибку
+провайдера получает клиент.
 
-Read API, доступный сервису Banking Agent:
+[Тест контекста](../tests/test_agent_context.py) проверяет HTTP-запросы SDK на
+40 репликах и 24 длинных записях памяти: персонализацию, границу суток UTC/Москва,
+отсутствие JWT и контактов в базовом профиле. В трассах сохраняются полные промпты
+с маскированием секретных полей и счётчики `conversation_messages`, `memory_records`,
+`memory_layers`, `has_customer_profile`, `current_date`, `timezone`.
+
+Прежние методы чтения, доступные сервису `banking-agent`:
 
 | Метод | Назначение |
 |---|---|
-| `POST /api/v1/context` | единый контекст из working, episodic, semantic и procedural |
-| `GET /api/v1/episodic/{agent_id}/{user_id}` | semantic search эпизодов пользователя |
-| `GET /api/v1/episodic/{agent_id}/{user_id}/{episode_id}` | эпизод по ID и scope |
-| `GET /api/v1/semantic/{agent_id}/{user_id}` | личные и общие semantic записи |
-| `GET /api/v1/semantic/{agent_id}/{user_id}/{semantic_id}` | semantic запись по ID и scope |
-| `GET /api/v1/procedure/{agent_id}` | поиск agent-wide процедур |
-| `GET /api/v1/procedure/{agent_id}/{procedure_id}` | процедура по ID |
+| `POST /api/v1/context` | Контекст из слоёв `working`, `episodic`, `semantic`, `procedural` |
+| `GET /api/v1/episodic/{agent_id}/{user_id}` | Поиск эпизодов пользователя |
+| `GET /api/v1/episodic/{agent_id}/{user_id}/{episode_id}` | Эпизод по ID и области |
+| `GET /api/v1/semantic/{agent_id}/{user_id}` | Личные и общие записи `semantic` |
+| `GET /api/v1/semantic/{agent_id}/{user_id}/{semantic_id}` | Запись по ID и области |
+| `GET /api/v1/procedure/{agent_id}` | Поиск общих процедур агента |
+| `GET /api/v1/procedure/{agent_id}/{procedure_id}` | Процедура по ID |
 
 ## LLM Memory Orchestrator
 
-Оркестратор обрабатывает очередь двумя способами:
+Оркестратор обрабатывает очередь по расписанию `MEMORY_ORCHESTRATION_INTERVAL_SECONDS`
+или по запросу `POST /api/v1/orchestrator/collect` / `POST /api/v1/episodic/agent/collect/{thread_id}`.
+Интервал по умолчанию 1800 секунд; `10` подходит для короткого опыта, `0` отключает
+расписание. Ручная обработка доступна в любом режиме и дожидается результата.
 
-1. по расписанию с интервалом `MEMORY_ORCHESTRATION_INTERVAL_SECONDS` из `.env`:
-   по умолчанию 1800 секунд; для короткого опыта можно поставить `10`, а `0`
-   отключает периодический запуск;
-2. оркестрационный `POST /api/v1/orchestrator/collect` либо
-   `POST /api/v1/episodic/agent/collect/{thread_id}`.
+Фильтры ручного запроса: `agent_id`, `user_id`, `conversation_id`, `limit` от 1 до 500.
+Обрабатываются только ожидающие задания. Повторный запрос не очищает память
+и не запускает завершённые задания. Пример обработки отдельного диалога:
+[CONFIGURATION.md](CONFIGURATION.md#обработка-долговременной-памяти).
 
-Ручной запрос работает при любом режиме расписания и дожидается результата обработки.
-Он принимает фильтры `agent_id`, `user_id`, `conversation_id` и `limit` от 1 до 500.
-Обрабатываются только ожидающие задания; завершённые не запускаются повторно,
-долговременная память не очищается. Для нового опыта материал нужно заново поставить
-в очередь. Настройка, проверка `/health` и пример запроса для отдельного диалога —
-в [конфигурации](CONFIGURATION.md#обработка-долговременной-памяти).
+Оркестратор атомарно захватывает задание `pending → processing`, вызывает LLM
+и создаёт до восьми записей. В `skills.*` все типы сохраняют клиента; в прежней
+области `episodic` остаётся личным, `semantic` и `procedural` получают `user_id="*"`.
+После успеха задание и исходные рабочие записи получают `completed` и `promoted_count`.
+Ошибку провайдера оркестратор сохраняет в задании. Допустимо до трёх попыток;
+ручной API также возвращает ошибку оператору.
 
-Он атомарно переводит job `pending → processing`, вызывает отдельный LLM-агент и создаёт до
-восьми promotion. Episodic остаётся пользовательским; semantic и procedural намеренно
-попадают в `user_id="*"` для сценариев poisoning. После успеха job и исходная working-запись
-получают `completed` и `promoted_count`. Ошибка провайдера сохраняется в job; scheduler
-повторяет попытку до трёх раз, а ручной API одновременно возвращает явную ошибку оператору.
+Операторский поиск доступен через `GET /api/v1/episodic`, `/episodic/{agent_id}`,
+`/episodic/{agent_id}/{user_id}`, аналогичные маршруты `semantic` и
+`GET /api/v1/procedure/{agent_id}`. Он поддерживает запрос по смыслу и доступ
+к разным областям. Банковскому сервису не выданы права на эти операторские методы;
+его API эпизодов и знаний требует указания пользователя.
 
-Для operator-wide аудита control plane также предоставляет read-методы без дополнительного
-идентификатора области: `GET /api/v1/episodic`, `/episodic/{agent_id}`,
-`/episodic/{agent_id}/{user_id}` и аналогичные маршруты `semantic`, а также
-`GET /api/v1/procedure/{agent_id}`. Они поддерживают embedding-query, но недоступны Banking
-Agent. Data plane намеренно оставляет только user-scoped episodic/semantic чтение, чтобы
-runtime-токен не превращался в cross-user administrative credential.
-
-API с изменяющими операциями существует только на control plane:
+Изменение долговременной памяти доступно только через операторский API:
 
 | Метод | Назначение |
 |---|---|
-| `POST /api/v1/episodic/direct` | прямое создание эпизодов оператором |
-| `POST /api/v1/episodic/agent` | извлечение эпизодов LLM-агентом |
-| `POST /api/v1/episodic/agent/collect/{thread_id}` | сбор из working memory диалога |
-| `DELETE /api/v1/episodic/{episode_id}` | удалить эпизод |
-| `DELETE /api/v1/episodic` | удалить только истёкшие эпизоды |
-| `POST /api/v1/semantic` | синтез semantic памяти из эпизодов |
-| `DELETE /api/v1/semantic/{agent_id}/{user_id}/{semantic_id}` | удалить semantic запись |
-| `DELETE /api/v1/semantic/{agent_id}/{user_id}` | decay по score/возрасту |
-| `POST /api/v1/procedural/{agent_id}` | создать процедуру с JSON payload |
-| `PUT /api/v1/procedural/{agent_id}/{procedure_id}` | обновить процедуру и embedding |
-| `DELETE /api/v1/procedural/{agent_id}/{procedure_id}` | удалить процедуру |
+| `POST /api/v1/episodic/direct` | Создать эпизоды напрямую |
+| `POST /api/v1/episodic/agent` | Извлечь эпизоды с помощью LLM |
+| `POST /api/v1/episodic/agent/collect/{thread_id}` | Обработать записи диалога |
+| `DELETE /api/v1/episodic/{episode_id}` | Удалить эпизод |
+| `DELETE /api/v1/episodic` | Удалить истёкшие эпизоды |
+| `POST /api/v1/semantic` | Синтезировать знания из эпизодов |
+| `DELETE /api/v1/semantic/{agent_id}/{user_id}/{semantic_id}` | Удалить запись знаний |
+| `DELETE /api/v1/semantic/{agent_id}/{user_id}` | Удалить записи по оценке и возрасту |
+| `POST /api/v1/procedural/{agent_id}` | Создать процедуру с JSON-данными |
+| `PUT /api/v1/procedural/{agent_id}/{procedure_id}` | Обновить процедуру и вектор |
+| `DELETE /api/v1/procedural/{agent_id}/{procedure_id}` | Удалить процедуру |
 
-Для ручной обработки получите `MEMORY_OPERATOR_TOKEN` по [инструкции](RUNBOOK.md#токены-для-лабораторных-запросов):
+Получите `MEMORY_OPERATOR_TOKEN` по [инструкции](RUNBOOK.md#токены-для-лабораторных-запросов), затем:
 
 ```bash
 curl -fsS http://localhost:8004/api/v1/orchestrator/collect \
@@ -218,16 +263,30 @@ curl -fsS http://localhost:8004/api/v1/orchestrator/collect \
   -d '{"agent_id":"banking-agent","limit":100}'
 ```
 
-Пользовательский токен и service token `banking-agent` должны получить `403` на порту 8004.
+Пользовательский токен и сервисный токен `banking-agent` получают `403` на этих
+методах порта 8004.
 
 ## Отравление памяти
 
-`POST /v1/lab/shared-memory` и `/v1/lab/ingest-external-memory` не пишут долгосрочный
-слой напрямую. Они сохраняют недоверенный working candidate; затем только оркестратор может
-переместить его в другие словы. Для poisoning-эксперимента после staging дождитесь scheduler
-или вызовите collection операторским токеном.
+`POST /v1/lab/shared-memory` и `/v1/lab/ingest-external-memory` сохраняют
+недоверенный рабочий кандидат. Для появления долговременных записей нужен запуск
+оркестратора по расписанию или операторский запрос обработки.
 
-Provenance (`source_user_id`, `source`, `trust`, `derived_from_job`) сохраняется, но учебный
-shared recall намеренно не применяет trust policy. Это позволяет проверить, как инструкция
-одного пользователя или внешнего MCP становится общей semantic/procedural памятью и влияет
-на контекст остальных пользователей, не выдавая Banking Agent права на control plane.
+Поля `source_user_id`, `source`, `trust`, `derived_from_job` сохраняют происхождение.
+Прежний общий поиск намеренно не применяет политику доверия: инструкция пользователя
+или внешнего MCP может стать общей записью `semantic`/`procedural` и попасть в контекст
+другого клиента. Права на операторский API банковскому агенту для этого не нужны.
+
+В межагентном опыте сопоставляйте `metadata.writer_agent`, `experiment_id`, `run_id`,
+`origin_source`, `derived_from_job`. Созданная запись имеет `source=memory-orchestrator`
+и `trust=untrusted-user-derived`. Извлечение не доказывает вредного применения;
+критерии описаны в [EXPERIMENTS.md](EXPERIMENTS.md#межагентный-перенос-через-память).
+
+### Состояние поездки
+
+`/api/v1/skills/turns` принимает необязательный `travel_state` с параметрами поездки.
+Он хранится в метаданных личной истории `travel-skill`; `/api/v1/skills/history`
+возвращает последнее состояние вместе с сообщениями. Область привязана к клиенту
+и агенту при обоих значениях `SKILL_MEMORY_MODE`.
+Банковский навык дополняет состояние после короткого уточнения; история
+не передаётся партнёру. Состояние поездки автоматически не публикуется в общей памяти.

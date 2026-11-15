@@ -6,10 +6,13 @@ import logging
 import os
 from collections.abc import Mapping
 from contextlib import ExitStack, contextmanager, nullcontext
+from contextvars import ContextVar
 from datetime import date, datetime
 from functools import wraps
 from typing import Any
 
+from opentelemetry.baggage import set_baggage
+from opentelemetry.trace import format_span_id, format_trace_id, get_current_span
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel
 from starlette.responses import Response
@@ -22,6 +25,19 @@ try:
 except ImportError:  # pragma: no cover - lets minimal tooling import the project
     get_client = None
     propagate_attributes = None
+
+
+_experiment = ContextVar("experiment", default=None)
+_upstream_trace = ContextVar("upstream_trace", default=None)
+
+
+@contextmanager
+def experiment_context(metadata):
+    marker = _experiment.set(dict(metadata))
+    try:
+        yield
+    finally:
+        _experiment.reset(marker)
 
 
 class NullObservation:
@@ -117,7 +133,11 @@ def observation(
     if get_client is None or propagate_attributes is None or not os.getenv("LANGFUSE_PUBLIC_KEY"):
         yield NullObservation()
         return
-    source_metadata = metadata or {}
+    source_metadata = {
+        **(_experiment.get() or {}),
+        **(_upstream_trace.get() or {}),
+        **(metadata or {}),
+    }
     resolved_agent_id = agent_id or _optional_string(source_metadata.get("agent_id"))
     trace_metadata = dict(source_metadata)
     system_id = os.getenv("AGENT_SYSTEM_ID")
@@ -131,56 +151,59 @@ def observation(
         # user_id is also a first-class Langfuse trace attribute. Keeping it in
         # metadata makes the identity explicit on exported child observations.
         trace_metadata["user_id"] = user_id
-    with independent_trace() if system_boundary else nullcontext():
+    # A service boundary is a child of the incoming request, not a new trace.
+    is_root = not get_current_span().get_span_context().is_valid
+    if system_boundary:
+        trace_metadata["system_boundary"] = True
+    try:
+        client = get_client()
+        attributes = {}
+        if model is not None:
+            attributes["model"] = model
+        if model_parameters is not None:
+            attributes["model_parameters"] = trace_value(model_parameters)
+        manager = client.start_as_current_observation(
+            name=name,
+            as_type=as_type,
+            input=trace_value(input),
+            metadata=trace_value(trace_metadata) or None,
+            **attributes,
+        )
+    except Exception:  # pragma: no cover - depends on external collector
+        logger.exception("Could not start Langfuse observation")
+        yield NullObservation()
+        return
+
+    with ExitStack() as stack:
+        tags = [f"system:{system_id}"] if system_id else []
+        if resolved_agent_id:
+            tags.append(f"agent:{resolved_agent_id}")
         try:
-            client = get_client()
-            attributes = {}
-            if model is not None:
-                attributes["model"] = model
-            if model_parameters is not None:
-                attributes["model_parameters"] = trace_value(model_parameters)
-            manager = client.start_as_current_observation(
-                name=name,
-                as_type=as_type,
-                input=trace_value(input),
-                metadata=trace_value(trace_metadata) or None,
-                **attributes,
+            span = stack.enter_context(manager)
+            stack.enter_context(
+                propagate_attributes(
+                    user_id=user_id,
+                    session_id=session_id,
+                    metadata=trace_value(trace_metadata) or None,
+                    tags=tags,
+                    trace_name=name if is_root else None,
+                )
             )
-        except Exception:  # pragma: no cover - depends on external collector
-            logger.exception("Could not start Langfuse observation")
+        except Exception:
+            logger.exception("Could not enter Langfuse observation")
             yield NullObservation()
             return
-
-        with ExitStack() as stack:
-            tags = [f"system:{system_id}"] if system_id else []
-            if resolved_agent_id:
-                tags.append(f"agent:{resolved_agent_id}")
-            try:
-                span = stack.enter_context(manager)
-                stack.enter_context(
-                    propagate_attributes(
-                        user_id=user_id,
-                        session_id=session_id,
-                        metadata=trace_value(trace_metadata) or None,
-                        tags=tags,
-                        trace_name=name,
-                    )
-                )
-            except Exception:
-                logger.exception("Could not enter Langfuse observation")
-                yield NullObservation()
-                return
-            recorded = RecordedObservation(span)
-            try:
-                yield recorded
-            except BaseException as exc:
-                error = {"type": type(exc).__name__, "message": str(exc)}
-                if hasattr(exc, "detail"):
-                    error["detail"] = trace_value(exc.detail)
-                recorded.update(level="ERROR", status_message=json.dumps(error, ensure_ascii=False))
-                if not recorded.has_output:
-                    recorded.update(output={"error": error})
-                raise
+        recorded = RecordedObservation(span)
+        try:
+            yield recorded
+        except BaseException as exc:
+            error = {"type": type(exc).__name__, "message": str(exc)}
+            if hasattr(exc, "detail"):
+                error["detail"] = trace_value(exc.detail)
+            recorded.update(level="ERROR", status_message=json.dumps(error, ensure_ascii=False))
+            if not recorded.has_output:
+                recorded.update(output={"error": error})
+            raise
 
 
 def traced(
@@ -236,27 +259,95 @@ def traced(
 
 
 def trace_headers() -> dict[str, str]:
-    """Propagate only the W3C parent to MCP services, never auth or user baggage."""
+    """Propagate only the W3C parent to downstreams, never auth or user baggage."""
     headers: dict[str, str] = {}
     TraceContextTextMapPropagator().inject(headers)
     if headers and os.getenv("AGENT_SYSTEM_ID"):
         headers["x-agent-system-id"] = os.environ["AGENT_SYSTEM_ID"]
+    for key, value in (_experiment.get() or {}).items():
+        if key in {"experiment_id", "run_id"}:
+            headers["x-" + key.replace("_", "-")] = str(value)
     return headers
+
+
+def install_experiment_middleware(app, *, accept_remote_parent: bool = True):
+    """Keep each HTTP request isolated; internal calls inherit only its W3C parent."""
+
+    @app.middleware("http")
+    async def labels(request, call_next):
+        metadata = {}
+        for key in ("experiment_id", "run_id"):
+            value = request.headers.get("x-" + key.replace("_", "-"))
+            if value and len(value) <= 100 and value.isascii() and value.isprintable():
+                metadata[key] = value
+        # Labels are correlation data only; they never participate in authorization.
+        with (
+            independent_trace(),
+            mcp_parent(request.headers) if accept_remote_parent else nullcontext(),
+            experiment_context(metadata),
+        ):
+            if request.url.path in {
+                "/health",
+                "/docs",
+                "/openapi.json",
+                "/.well-known/agent-card.json",
+            }:
+                return await call_next(request)
+            payload = None
+            if "application/json" in request.headers.get("content-type", "") or (
+                "application/a2a+json" in request.headers.get("content-type", "")
+            ):
+                try:
+                    payload = await request.json()
+                except ValueError:
+                    pass
+            correlation = payload.get("conversation_id") if isinstance(payload, dict) else None
+            if isinstance(payload, dict) and isinstance(payload.get("message"), dict):
+                correlation = correlation or payload["message"].get("contextId")
+            with observation(
+                f"HTTP {request.method} {request.url.path}",
+                input={"method": request.method, "path": request.url.path, "body": payload},
+                session_id=correlation,
+                system_boundary=True,
+            ) as span:
+                response = await call_next(request)
+                span.update(
+                    output={"status_code": response.status_code},
+                    **({"level": "ERROR"} if response.status_code >= 400 else {}),
+                )
+                return response
 
 
 @contextmanager
 def mcp_parent(headers: Mapping[str, str]):
-    """Join only a caller in this system; receiving systems keep separate roots."""
+    """Join local-system calls; link foreign traces without exporting their observations."""
+    parent = TraceContextTextMapPropagator().extract(dict(headers))
+    span_context = get_current_span(parent).get_span_context()
     system_id = os.getenv("AGENT_SYSTEM_ID")
-    if system_id and headers.get("x-agent-system-id") == system_id:
-        token = attach(TraceContextTextMapPropagator().extract(dict(headers)))
+    if span_context.is_valid and headers.get("x-agent-system-id") == system_id:
+        # Langfuse v4 otherwise marks the first span in each process as an app root.
+        # Derive this marker locally; never import arbitrary incoming baggage.
+        parent = set_baggage("langfuse_trace_id", format_trace_id(span_context.trace_id), parent)
+        token = attach(parent)
         try:
             yield
         finally:
             detach(token)
-    else:
+    elif span_context.is_valid:
         with independent_trace():
-            yield
+            upstream = _upstream_trace.set(
+                {
+                    "upstream_trace_id": format_trace_id(span_context.trace_id),
+                    "upstream_span_id": format_span_id(span_context.span_id),
+                    "upstream_system_id": (headers.get("x-agent-system-id") or "unknown")[:100],
+                }
+            )
+            try:
+                yield
+            finally:
+                _upstream_trace.reset(upstream)
+    else:
+        yield
 
 
 def _optional_string(value: Any) -> str | None:
@@ -270,7 +361,9 @@ def _optional_string(value: Any) -> str | None:
 def independent_trace():
     """Start a receiving system's trace without inheriting the caller's OTel parent/baggage."""
     token = attach(Context())
+    upstream = _upstream_trace.set(None)
     try:
         yield
     finally:
+        _upstream_trace.reset(upstream)
         detach(token)

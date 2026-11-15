@@ -85,8 +85,7 @@ async def test_natural_language_travel_request_keeps_named_cities() -> None:
     request = await skills._trip_request(
         {
             "message": (
-                "я живу в Тбилиси и хочу поехать в Ереван, "
-                "что интересного есть в Ереване?"
+                "я живу в Тбилиси и хочу поехать в Ереван, что интересного есть в Ереване?"
             ),
             "user_id": "customer-001",
         }
@@ -105,6 +104,34 @@ class PlannerLLM:
             get_recommendations=False,
             rationale="model proposed too many tools",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("complete", [True, False])
+async def test_budget_searches_known_outbound_route_without_requiring_a_return(
+    monkeypatch, complete
+):
+    monkeypatch.setenv("SERVICE_CLIENT_ID", "travel-agent-test")
+    monkeypatch.setenv("SERVICE_CLIENT_SECRET", "test-secret")
+    module = importlib.import_module("services.travel_agent.app")
+    graph = object.__new__(module.travel_graph.__class__)
+    graph.llm = PlannerLLM()
+    trip = module.TripRequest.model_validate(
+        {
+            "user_id": "customer-001",
+            "request_type": "budget_plan",
+            "destination": "Пхукет",
+            "origin": "LED" if complete else None,
+            "destination_airport": "HKT",
+            "departure_date": "2026-12-03",
+            "stay_end_date": "2026-12-20",
+            "one_way": True,
+            "adults": 3,
+        }
+    )
+    result = await graph.plan({"request": trip.model_dump(mode="json")})
+    assert result["plan"]["search_flights"] is complete
+    assert result["plan"]["get_recommendations"] is True
 
 
 @pytest.mark.asyncio
@@ -156,26 +183,64 @@ async def test_travel_graph_searches_only_flights_and_destinations_with_legacy_e
 
     monkeypatch.setattr(graph.llm, "generate_json", AsyncMock(side_effect=generate))
     monkeypatch.setattr(graph.tokens, "get", AsyncMock(return_value="travel-token"))
-    monkeypatch.setattr(graph.flights, "list_tools", AsyncMock(return_value=[{
-        "name": "search_flights",
-        "inputSchema": {"properties": {key: {} for key in (
-            "origin", "destination", "departure_date", "return_date", "adults",
-            "currency", "max_results",
-        )}},
-    }]))
-    monkeypatch.setattr(graph.flights, "call", AsyncMock(return_value={
-        "results": [{"synthetic": True, "mode": "mock-external-mcp", "price": 10000}],
-    }))
-    monkeypatch.setattr(graph.destination_search, "call", AsyncMock(return_value={
-        "results": [{"title": "Музеи Еревана"}], "mode": "live-mcp-read-only",
-    }))
+    monkeypatch.setattr(
+        graph.flights,
+        "list_tools",
+        AsyncMock(
+            return_value=[
+                {
+                    "name": "search_flights",
+                    "inputSchema": {
+                        "properties": {
+                            key: {}
+                            for key in (
+                                "origin",
+                                "destination",
+                                "departure_date",
+                                "return_date",
+                                "adults",
+                                "currency",
+                                "max_results",
+                            )
+                        }
+                    },
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        graph.flights,
+        "call",
+        AsyncMock(
+            return_value={
+                "results": [{"synthetic": True, "mode": "mock-external-mcp", "price": 10000}],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        graph.destination_search,
+        "call",
+        AsyncMock(
+            return_value={
+                "results": [{"title": "Музеи Еревана"}],
+                "mode": "live-mcp-read-only",
+            }
+        ),
+    )
     departure = date.today() + timedelta(days=30)
 
-    state = await graph.graph.ainvoke({"request": {
-        "request_type": "trip_search", "origin": "MOW", "destination": "Ереван",
-        "destination_airport": "EVN", "departure_date": departure.isoformat(),
-        "return_date": (departure + timedelta(days=7)).isoformat(),
-    }})
+    state = await graph.graph.ainvoke(
+        {
+            "request": {
+                "request_type": "trip_search",
+                "origin": "MOW",
+                "destination": "Ереван",
+                "destination_airport": "EVN",
+                "departure_date": departure.isoformat(),
+                "return_date": (departure + timedelta(days=7)).isoformat(),
+            }
+        }
+    )
 
     result = state["result"]
     assert len(result["flights"]) == 1
@@ -185,10 +250,11 @@ async def test_travel_graph_searches_only_flights_and_destinations_with_legacy_e
     assert result["search_errors"] == []
     assert result["booking"]["external_side_effect"] is False
     assert state["tool_calls"] == [
-        "llm.plan_tools", "flights.search_flights", "duckduckgo.text_search",
+        "llm.plan_tools",
+        "flights.search_flights",
+        "duckduckgo.text_search",
         "llm.rank_search_results",
     ]
     assert "REMOVED_PROVIDER_KEY" not in json.dumps(requests)
     graph.flights.call.assert_awaited_once()
     graph.destination_search.call.assert_awaited_once()
-

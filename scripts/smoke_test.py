@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
 
-KEYCLOAK = os.getenv(
-    "SMOKE_KEYCLOAK_URL", "http://localhost:8080/realms/agentic-banking"
-).rstrip("/")
+KEYCLOAK = os.getenv("SMOKE_KEYCLOAK_URL", "http://localhost:8080/realms/agentic-banking").rstrip(
+    "/"
+)
 AGENT = os.getenv("SMOKE_AGENT_URL", "http://localhost:8000").rstrip("/")
 TRAVEL_AGENT = os.getenv("SMOKE_TRAVEL_URL", "http://localhost:8003").rstrip("/")
 ORCHESTRATOR = os.getenv("SMOKE_ORCHESTRATOR_URL", "http://localhost:8004").rstrip("/")
@@ -53,9 +55,7 @@ def memory_operator_token() -> str:
         data={
             "grant_type": "client_credentials",
             "client_id": "memory-operator",
-            "client_secret": os.getenv(
-                "KEYCLOAK_MEMORY_OPERATOR_SECRET", "memory-operator-secret"
-            ),
+            "client_secret": os.getenv("KEYCLOAK_MEMORY_OPERATOR_SECRET", "memory-operator-secret"),
         },
         timeout=10,
     )
@@ -89,14 +89,161 @@ def orchestrator_request(method: str, path: str, token: str, **kwargs: Any) -> A
     return response.json()
 
 
-def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
+def check_travel_budget(token: str, conversation_id: str) -> None:
+    budget = request(
+        "POST",
+        "/v1/chat",
+        token,
+        json={
+            "message": "Я хочу поехать в тайланд, давай спланируем мои траты",
+            "conversation_id": f"{conversation_id}-budget",
+        },
+    )
+    assert budget["intent"] == "travel"
+    assert budget["data"]["missing_fields"]
+    assert "destination_airport" not in budget["data"]["missing_fields"]
+    assert "a2a.travel.plan-trip" not in budget["tool_calls"]
+    assert not any(
+        field in budget["message"]
+        for field in ("origin", "destination_airport", "departure_date", "return_date")
+    )
+    print("OK conversational travel budget clarification:", budget["message"])
+    followup = request(
+        "POST",
+        "/v1/chat",
+        token,
+        json={
+            "message": "Из Москвы, в январе на десять дней",
+            "conversation_id": f"{conversation_id}-budget",
+        },
+    )
+    assert followup["intent"] == "travel"
+    assert followup["data"]["missing_fields"] == ["adults"], followup
+    assert "a2a.travel.plan-trip" not in followup["tool_calls"]
+    assert not any(
+        field in followup["message"]
+        for field in ("origin", "destination_airport", "departure_date", "return_date", "adults")
+    )
+    print("OK short reply preserves trip details:", followup["message"])
+
+
+def check_phuket_budget(token: str, conversation_id: str) -> None:
+    """Reproduce the reported multi-turn December 2026 outbound itinerary."""
+    session = conversation_id + "-phuket"
+    initial = request(
+        "POST",
+        "/v1/chat",
+        token,
+        json={
+            "message": "Я хочу поехать в тайланд, давай спланируем мои траты",
+            "conversation_id": session,
+        },
+    )
+    assert initial["intent"] == "travel"
+    replies = []
+    for message in [
+        "3 взрослых путешественника на пхукет с 3 декабря из петербурга до 20 декабря "
+        "и далее перелёт в шанхай — билеты до шанхая не учитывай, эти планы еще могут поменяться",
+        "2026 год + у тебя же есть тревел-агент, он умеет составлять планы путешествий",
+    ]:
+        answer = request(
+            "POST",
+            "/v1/chat",
+            token,
+            json={
+                "message": message,
+                "conversation_id": session,
+            },
+        )
+        assert answer["intent"] == "travel"
+        travel = answer["data"].get("travel")
+        assert travel, answer["message"]
+        assert travel["request_type"] == "budget_plan"
+        assert travel["flight_route"] == {
+            "origin": "LED",
+            "destination_airport": "HKT",
+            "departure_date": "2026-12-03",
+            "return_date": None,
+            "adults": 3,
+        }, travel["flight_route"]
+        assert any(
+            tool in travel["tool_calls"] for tool in ["tutu.search_avia", "flights.search_flights"]
+        )
+        replies.append(
+            {
+                "route": travel["flight_route"],
+                "flight_mode": travel["provider_modes"]["flight_search"],
+                "flight_count": len(travel["flights"]),
+                "web_count": len(travel["recommendations"]),
+                "search_meta": travel["destination_search_meta"],
+                "search_errors": travel["search_errors"],
+                "response": answer["message"],
+            }
+        )
+    print(json.dumps({"conversation_id": session, "turns": replies}, ensure_ascii=False, indent=2))
+    assert replies[-1]["flight_count"] or replies[-1]["web_count"], (
+        "No real search results received"
+    )
+
+
+def check_orchestration(token: str, conversation_id: str) -> None:
+    answer = request(
+        "POST",
+        "/v1/chat",
+        token,
+        json={
+            "message": (
+                "Составь предварительный бюджет поездки в Стамбул на 10 дней "
+                "в декабре 2026 года для двоих из Санкт-Петербурга. "
+                "Сопоставь расходы на поездку с текущими остатками моих счетов "
+                "и банковскими расходами."
+            ),
+            "conversation_id": conversation_id + "-orchestration",
+            "travel": {
+                "request_type": "budget_plan",
+                "destination": "Стамбул",
+                "origin": "Санкт-Петербург",
+                "travel_period": "декабрь 2026",
+                "duration_days": 10,
+                "adults": 2,
+            },
+        },
+    )
+    data = answer["data"]
+    assert set(data["orchestration"]["delegated_agents"]) == {"travel", "operations"}
+    assert data["agent_results"]["operations"]["data"]["accounts"]
+    assert data["agent_results"]["travel"]["data"]["travel"]["request_type"] == "budget_plan"
+    assert "llm.orchestrator_response" in answer["tool_calls"]
+    report = Path("artifacts/docker-review/orchestration.json")
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(json.dumps(answer, ensure_ascii=False, indent=2) + "\n")
+    print("OK orchestrator combines travel and banking analysis:", answer["message"])
+
+
+def run(
+    confirm: bool,
+    expect_llm_unavailable: bool = False,
+    travel_budget: bool = False,
+    phuket_budget: bool = False,
+    orchestration: bool = False,
+) -> None:
     wait_for(f"{KEYCLOAK}/.well-known/openid-configuration")
     wait_for(f"{AGENT}/health")
     wait_for(f"{TRAVEL_AGENT}/health")
     wait_for(f"{ORCHESTRATOR}/health")
     token = login()
-    second_token = login("anna.sokolova")
     conversation_id = f"smoke-{int(time.time())}"
+    if orchestration:
+        assert httpx.get(f"{AGENT}/health", timeout=5).json()["agent_mode"] == "orchestrator"
+        check_orchestration(token, conversation_id)
+        return
+    if phuket_budget:
+        check_phuket_budget(token, conversation_id)
+        return
+    if travel_budget:
+        check_travel_budget(token, conversation_id)
+        return
+    second_token = login("anna.sokolova")
 
     dashboard = request("GET", "/v1/dashboard", token)
     assert dashboard["customer"]["id"] == "customer-001"
@@ -116,6 +263,54 @@ def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
         assert response.status_code == 503, response.text
         assert response.json()["code"] == "llm_unavailable"
         print("OK unavailable LLM is returned to the UI as explicit HTTP 503")
+        return
+
+    mode = httpx.get(f"{AGENT}/health", timeout=5).json().get("agent_mode", "legacy")
+    if mode == "orchestrator":
+        if confirm:
+            raise RuntimeError("--confirm requires BANKING_AGENT_MODE=legacy")
+        today = date.today()
+        month_start = today.replace(day=1).isoformat()
+        for message, intent, data_key in [
+            (
+                f"Дай общий расклад по моим счетам и остаткам, профилю и продуктам АБС. "
+                f"Составь выписку с {month_start} по {today.isoformat()} включительно.",
+                "operations",
+                "statement",
+            ),
+            ("Проанализируй мой инвестиционный портфель", "investments", "portfolio"),
+            ("Что посмотреть в Стамбуле?", "travel", "travel"),
+        ]:
+            body = {"message": message, "conversation_id": f"{conversation_id}-{intent}"}
+            if intent == "travel":
+                body["travel"] = {"request_type": "destination_info", "destination": "Стамбул"}
+            answer = request("POST", "/v1/chat", token, json=body)
+            assert answer["intent"] == intent and data_key in answer["data"]
+            assert answer["data"]["experiment"]["run_id"]
+            if intent == "operations":
+                assert {
+                    "customer",
+                    "accounts",
+                    "operations",
+                    "statement",
+                    "portfolio",
+                    "products",
+                } <= answer["data"].keys()
+                statement = answer["data"]["statement"]
+                assert statement["date_from"] == month_start
+                assert statement["date_to"] == today.isoformat()
+                print("OK banking overview and dated statement:", answer["message"])
+            print(f"OK delegated {intent} skill with experiment evidence")
+            if intent == "travel":
+                travel_result = answer["data"]["travel"]
+                status = travel_result["destination_search_meta"]["status"]
+                assert status in ("ok", "empty", "unavailable")
+                if status != "ok":
+                    assert travel_result["recommendations"] == []
+                    assert travel_result["agent_cautions"]
+                print(f"OK destination search status={status}: {answer['message']}")
+        check_travel_budget(token, conversation_id)
+        print("Orchestrator smoke completed; OAuth negatives: scripts/skill_experiment.py")
         return
 
     second_dashboard = request("GET", "/v1/dashboard", second_token)
@@ -182,9 +377,7 @@ def run(confirm: bool, expect_llm_unavailable: bool = False) -> None:
 
     conversations = request("GET", "/v1/conversations", token)["conversations"]
     assert any(item["conversation_id"] == conversation_id for item in conversations)
-    history = request(
-        "GET", f"/v1/conversations/{conversation_id}/messages", token
-    )["messages"]
+    history = request("GET", f"/v1/conversations/{conversation_id}/messages", token)["messages"]
     assert [item["role"] for item in history[-2:]] == ["user", "assistant"]
     assert history[-2]["content"] == "Покажи мои счета"
     assert history[-1]["content"] == chat["message"]
@@ -279,9 +472,30 @@ if __name__ == "__main__":
         action="store_true",
         help="assert that chat fails explicitly when required LLM settings are absent",
     )
+    parser.add_argument(
+        "--travel-budget",
+        action="store_true",
+        help="check conversational budget clarification without external travel search",
+    )
+    parser.add_argument(
+        "--phuket-budget",
+        action="store_true",
+        help="reproduce the reported December 2026 Phuket budget itinerary",
+    )
+    parser.add_argument(
+        "--orchestration",
+        action="store_true",
+        help="check that the orchestrator consults travel and operations and composes the answer",
+    )
     try:
         args = parser.parse_args()
-        run(args.confirm, args.expect_llm_unavailable)
+        run(
+            args.confirm,
+            args.expect_llm_unavailable,
+            args.travel_budget,
+            args.phuket_budget,
+            args.orchestration,
+        )
     except Exception as exc:
         print(f"FAILED: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

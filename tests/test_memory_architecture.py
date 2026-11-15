@@ -56,10 +56,12 @@ def test_keycloak_separates_memory_service_and_orchestrator_audiences() -> None:
     banking_audiences = {
         mapper["config"].get("included.client.audience")
         for mapper in clients["banking-agent"]["protocolMappers"]
+        if mapper["protocolMapper"] == "oidc-audience-mapper"
     }
     operator_audiences = {
         mapper["config"].get("included.client.audience")
         for mapper in clients["memory-operator"]["protocolMappers"]
+        if mapper["protocolMapper"] == "oidc-audience-mapper"
     }
     assert "memory-service" in banking_audiences
     assert "memory-orchestrator" not in banking_audiences

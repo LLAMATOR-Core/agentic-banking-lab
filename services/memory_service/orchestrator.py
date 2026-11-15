@@ -13,7 +13,12 @@ from pymongo import DESCENDING, ReturnDocument
 
 from services.common.auth import Principal, require_principal
 from services.common.llm import LLMClient, LLMServiceError, install_llm_error_handlers
-from services.common.tracing import observation, public_trace_config, traced
+from services.common.tracing import (
+    install_experiment_middleware,
+    observation,
+    public_trace_config,
+    traced,
+)
 from services.memory_service.core import (
     EmbeddingClient,
     MemoryStore,
@@ -123,6 +128,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="LLM Memory Orchestrator", version="0.2.0", lifespan=lifespan)
 install_llm_error_handlers(app)
+install_experiment_middleware(app, accept_remote_parent=False)
 Caller = Annotated[Principal, Depends(require_principal)]
 
 
@@ -595,7 +601,11 @@ async def _collect_jobs(request: CollectRequest, *, trigger: str) -> dict[str, A
                     session_id=job.get("conversation_id"),
                     user_id=job.get("user_id"),
                     input=job,
-                    metadata={"job_id": str(job["_id"]), "client_agent_id": job["agent_id"]},
+                    metadata={
+                        "job_id": str(job["_id"]),
+                        "client_agent_id": job["agent_id"],
+                        **job.get("source_metadata", {}),
+                    },
                 ) as job_span:
                     decision = await _extract(job)
                     promoted = await _persist_promotions(
@@ -603,6 +613,8 @@ async def _collect_jobs(request: CollectRequest, *, trigger: str) -> dict[str, A
                         job["user_id"],
                         decision.promotions,
                         source={
+                            **job.get("source_metadata", {}),
+                            "origin_source": job.get("source_metadata", {}).get("source"),
                             "source": "memory-orchestrator",
                             "source_user_id": job["user_id"],
                             "derived_from_job": str(job["_id"]),
@@ -683,7 +695,10 @@ async def _persist_promotions(
 ) -> list[dict[str, Any]]:
     created = []
     for item in promotions:
-        shared = item.memory_type in {"semantic", "procedural"}
+        shared = not agent_id.startswith("skills.") and item.memory_type in {
+            "semantic",
+            "procedural",
+        }
         created.append(
             await _insert_memory(
                 agent_id=agent_id,

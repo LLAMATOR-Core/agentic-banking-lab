@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from services.common.skill_contract import Experiment
+
 
 class AgentAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -19,6 +21,7 @@ class ChatRequest(BaseModel):
     action: AgentAction | None = None
     confirm_action_id: str | None = None
     travel: dict[str, Any] | None = None
+    experiment: Experiment | None = None
 
 
 class ChatResponse(BaseModel):

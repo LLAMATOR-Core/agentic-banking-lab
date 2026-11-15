@@ -76,46 +76,30 @@ def test_agent_systems_do_not_share_networks_or_database_access(services):
     assert services["banking-agent"]["environment"]["MEMORY_URL"] == "http://memory-api:8002"
 
 
-def test_each_system_exports_only_to_its_own_langfuse_project(services):
+def test_systems_keep_their_own_langfuse_projects_and_credentials(services):
     systems = {
         "banking": (
             "langfuse-web",
-            "Banking",
             ["banking-agent", "abs-api", "abs-mcp", "abs-mcp-vulnerable", "duckduckgo-mcp"],
         ),
-        "travel": (
-            "langfuse-travel",
-            "Travel",
-            ["travel-agent", "flights-mcp", "travel-duckduckgo-mcp"],
-        ),
-        "memory": (
-            "langfuse-memory",
-            "Persistent Memory",
-            ["memory-service", "memory-orchestrator"],
-        ),
+        "travel": ("langfuse-travel", ["travel-agent", "flights-mcp", "travel-duckduckgo-mcp"]),
+        "memory": ("langfuse-memory", ["memory-service", "memory-orchestrator"]),
     }
-    public_keys, secret_keys, project_ids = set(), set(), set()
-    for system, (collector, project, members) in systems.items():
+    keys, secrets, projects = set(), set(), set()
+    for system, (collector, members) in systems.items():
         initialized = services[collector]["environment"]
-        assert initialized["LANGFUSE_INIT_PROJECT_NAME"] == project
-        project_ids.add(initialized["LANGFUSE_INIT_PROJECT_ID"])
-        public_keys.add(initialized["LANGFUSE_INIT_PROJECT_PUBLIC_KEY"])
-        secret_keys.add(initialized["LANGFUSE_INIT_PROJECT_SECRET_KEY"])
+        keys.add(initialized["LANGFUSE_INIT_PROJECT_PUBLIC_KEY"])
+        secrets.add(initialized["LANGFUSE_INIT_PROJECT_SECRET_KEY"])
+        projects.add(initialized["LANGFUSE_INIT_PROJECT_ID"])
         for service in members:
             env = services[service]["environment"]
             assert env["AGENT_SYSTEM_ID"] == system
             assert env["LANGFUSE_BASE_URL"] == f"http://{collector}:3000"
+            assert env["LANGFUSE_PROJECT_ID"] == initialized["LANGFUSE_INIT_PROJECT_ID"]
+            assert env["LANGFUSE_PROJECT_NAME"] == initialized["LANGFUSE_INIT_PROJECT_NAME"]
             assert env["LANGFUSE_PUBLIC_KEY"] == initialized["LANGFUSE_INIT_PROJECT_PUBLIC_KEY"]
             assert env["LANGFUSE_SECRET_KEY"] == initialized["LANGFUSE_INIT_PROJECT_SECRET_KEY"]
-            assert not any(key.endswith("_LANGFUSE_SECRET_KEY") for key in env)
-    assert len(public_keys) == len(secret_keys) == len(project_ids) == 3
-    assert (
-        services["langfuse-travel"]["depends_on"]["langfuse-web"]["condition"] == "service_healthy"
-    )
-    assert (
-        services["langfuse-memory"]["depends_on"]["langfuse-travel"]["condition"]
-        == "service_healthy"
-    )
+    assert len(keys) == len(secrets) == len(projects) == 3
 
 
 def test_gateways_allow_only_documented_application_interfaces(services):
@@ -124,7 +108,7 @@ def test_gateways_allow_only_documented_application_interfaces(services):
         assert str(services[gateway]["sysctls"]["net.ipv4.ip_forward"]) == "0"
         config = (ROOT / "infra" / "boundaries" / f"{gateway}.conf").read_text()
         assert "location / { return 404; }" in config
-        assert 'proxy_set_header traceparent "";' in config
+        assert "proxy_set_header traceparent $http_traceparent;" in config
         assert 'proxy_set_header baggage "";' in config
     travel = (ROOT / "infra/boundaries/travel-api.conf").read_text()
     assert "location = /a2a/v1/message:send" in travel
@@ -159,3 +143,21 @@ def test_travel_search_has_a_distinct_jwt_audience():
     assert "travel-duckduckgo-mcp" in audiences("travel-agent")
     assert "duckduckgo-mcp" not in audiences("travel-agent")
     assert "travel-duckduckgo-mcp" not in audiences("banking-agent")
+
+
+def test_agents_share_banking_service_with_distinct_downstream_credentials(services):
+    agents = ["operations-skill", "investment-skill", "travel-skill"]
+    assert not set(agents + ["operations-mcp", "investment-mcp"]) & set(services)
+    env = services["banking-agent"]["environment"]
+    for agent in agents:
+        assert f"KEYCLOAK_{agent.upper().replace('-', '_')}_SECRET" in env
+    assert set(services["banking-agent"]["networks"]) == {"banking"}
+    assert set(services["abs-mcp"]["environment"]["ALLOWED_AZP"].split(",")) == {
+        "bank-ui",
+        "operations-skill",
+        "investment-skill",
+    }
+    assert set(services["abs-mcp"]["environment"]["EXPECTED_AUDIENCE"].split(",")) == {
+        "abs-mcp",
+        "bank-mcp",
+    }

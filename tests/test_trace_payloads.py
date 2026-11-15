@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.trace import get_current_span
 from pydantic import BaseModel
@@ -158,7 +160,13 @@ async def test_mcp_http_and_server_results_join_the_callers_trace(monkeypatch, r
         if row["name"] == "mcp.http" and row["input"]["method"] == "tools/call"
     )
     assert len({row["trace_id"] for row in recorded}) == 1
-    assert server["parent_id"] == http["id"]
+    receiver = next(
+        row
+        for row in recorded
+        if row["name"] == "HTTP POST /mcp" and row["input"]["body"]["method"] == "tools/call"
+    )
+    assert receiver["parent_id"] == http["id"]
+    assert server["parent_id"] == receiver["id"]
     assert server["input"]["arguments"] == {"text": "full result"}
     assert server["output"] == {"text": "full result", "nested": {"token": "[REDACTED]"}}
     assert http["output"]["result"]["structuredContent"] == server["output"]
@@ -166,14 +174,85 @@ async def test_mcp_http_and_server_results_join_the_callers_trace(monkeypatch, r
     assert "USER_JWT" not in json.dumps(recorded)
 
 
-def test_mcp_parent_cannot_join_a_different_system(recorded):
+def test_foreign_system_has_one_separate_tree_linked_to_its_caller(recorded):
     with tracing.observation("banking"):
         parent = get_current_span().get_span_context().trace_id
         headers = tracing.trace_headers()
         headers["x-agent-system-id"] = "travel"
         with tracing.mcp_parent(headers), tracing.observation("other-system"):
             assert get_current_span().get_span_context().trace_id != parent
+            with tracing.observation("nested.step"):
+                pass
         assert get_current_span().get_span_context().trace_id == parent
+    caller, receiver, child = recorded
+    assert receiver["parent_id"] is None
+    assert child["parent_id"] == receiver["id"]
+    assert receiver["metadata"]["upstream_trace_id"] == f"{parent:032x}"
+    with tracing.observation("unrelated"):
+        pass
+    assert "upstream_trace_id" not in recorded[-1]["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_http_requests_have_one_tree_across_services_and_do_not_mix(recorded):
+    downstream = FastAPI()
+    tracing.install_experiment_middleware(downstream)
+
+    @downstream.post("/work")
+    @tracing.traced("internal.request", system_boundary=True)
+    async def work(payload: dict):
+        with tracing.observation(f"{payload['system']}.step"):
+            await asyncio.sleep(0)
+            return {"ok": True}
+
+    bank = FastAPI()
+    tracing.install_experiment_middleware(bank, accept_remote_parent=False)
+
+    @bank.post("/chat")
+    @tracing.traced("banking.api.chat", system_boundary=True)
+    async def chat(payload: dict):
+        async def call(system):
+            with tracing.observation(f"{system}.http"):
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=downstream), base_url="http://internal"
+                ) as client:
+                    response = await client.post(
+                        "/work", json={"system": system}, headers=tracing.trace_headers()
+                    )
+                    response.raise_for_status()
+                    return response.json()
+
+        with tracing.observation("banking.turn", session_id=payload["conversation_id"]):
+            return await asyncio.gather(call("memory"), call("travel"))
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=bank), base_url="http://bank"
+    ) as client:
+        # External callers cannot merge two user requests by choosing one parent.
+        responses = await asyncio.gather(
+            *[
+                client.post(
+                    "/chat",
+                    json={"conversation_id": f"session-{i}"},
+                    headers={
+                        "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+                    },
+                )
+                for i in range(2)
+            ]
+        )
+    assert all(response.status_code == 200 for response in responses)
+    roots = [row for row in recorded if row["parent_id"] is None]
+    assert len(roots) == 2
+    assert all(row["name"] == "HTTP POST /chat" for row in roots)
+    assert len({row["trace_id"] for row in recorded}) == 2
+    for root in roots:
+        tree = [row for row in recorded if row["trace_id"] == root["trace_id"]]
+        assert len(tree) == 11
+        ids = {row["id"] for row in tree}
+        assert all(row is root or row["parent_id"] in ids for row in tree)
+        assert {row["name"] for row in tree} >= {"memory.step", "travel.step"}
+        assert root["trace_id"] != int("1" * 32, 16)
 
 
 @pytest.mark.asyncio
@@ -277,6 +356,12 @@ def test_real_langfuse_sdk_exports_typed_payloads_and_usage_without_network(monk
                 "embedding", as_type="embedding", input=["text"], model="embedding-model"
             ) as span:
                 span.update(output={"vectors": [[0.1, 0.2]]}, usage_details={"input": 2})
+            headers = tracing.trace_headers()
+        # Simulate receipt after the local parent has ended: the receiving SDK
+        # must not promote its first observation into a second logical root.
+        with tracing.independent_trace(), tracing.mcp_parent(headers):
+            with tracing.observation("remote", system_boundary=True):
+                pass
         client.flush()
         spans = {s.name: s for s in exporter.get_finished_spans()}
         model = spans["model"]
@@ -289,6 +374,15 @@ def test_real_langfuse_sdk_exports_typed_payloads_and_usage_without_network(monk
             "output": 5,
         }
         assert spans["embedding"].attributes["langfuse.observation.type"] == "embedding"
+        assert {
+            s.attributes.get("langfuse.trace.name") for name, s in spans.items() if name != "remote"
+        } == {"turn"}
+        assert spans["remote"].context.trace_id == spans["turn"].context.trace_id
+        assert spans["remote"].parent.span_id == spans["turn"].context.span_id
+        assert (
+            sum(bool(s.attributes.get("langfuse.internal.is_app_root")) for s in spans.values())
+            == 1
+        )
     finally:
         client.shutdown()
         provider.shutdown()

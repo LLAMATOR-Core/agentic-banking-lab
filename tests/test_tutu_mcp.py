@@ -2,7 +2,9 @@ import copy
 import importlib
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 
@@ -150,3 +152,67 @@ def test_mock_requires_explicit_provider_selection(graph, monkeypatch):
     monkeypatch.setenv("FLIGHTS_PROVIDER", "typo")
     with pytest.raises(ValueError, match="FLIGHTS_PROVIDER"):
         type(graph)()
+
+
+@pytest.mark.asyncio
+async def test_one_way_tutu_query_does_not_include_a_return_or_onward_leg(graph, monkeypatch):
+    async def list_tools():
+        return [
+            {
+                "name": "search_avia",
+                "inputSchema": {
+                    "properties": {
+                        key: {}
+                        for key in (
+                            "origin",
+                            "destination",
+                            "departure_date",
+                            "adults",
+                            "page_size",
+                            "view",
+                        )
+                    }
+                },
+            }
+        ]
+
+    calls = []
+
+    async def call(name, arguments):
+        calls.append(arguments)
+        return {"offers": []}
+
+    monkeypatch.setattr(graph.flights, "list_tools", list_tools)
+    monkeypatch.setattr(graph.flights, "call", call)
+    await graph._search_flights(
+        {
+            "origin": "LED",
+            "destination": "Пхукет",
+            "destination_airport": "HKT",
+            "departure_date": "2026-12-03",
+            "stay_end_date": "2026-12-20",
+            "adults": 3,
+            "one_way": True,
+        }
+    )
+    assert calls == [
+        {
+            "origin": "LED",
+            "destination": "HKT",
+            "departure_date": "2026-12-03",
+            "adults": 3,
+            "page_size": 10,
+            "view": "compact",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_readonly_tutu_search_retries_one_transient_connect_error(graph, monkeypatch):
+    call = AsyncMock(side_effect=[httpx.ConnectError(""), {"offers": []}])
+    monkeypatch.setattr(graph, "_call_adapted_tool", call)
+    result = await graph._search_flights(trip())
+    assert call.await_count == 2
+    assert result["mode"] == "live-mcp-read-only"
+    assert [item["status"] for item in result["meta"]["attempts"]] == ["error", "ok"]
+    assert result["meta"]["attempts"][0]["error_type"] == "ConnectError"

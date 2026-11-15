@@ -6,6 +6,15 @@ from typing import Any
 
 import httpx
 
+from services.common.oauth_config import (
+    CLIENT_SCOPES,
+    SCOPE_AUDIENCES,
+    TOKEN_CLIENTS,
+    customer_mapper,
+    scope_representation,
+    subject_mapper,
+)
+
 BASE = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
 REALM = "agentic-banking"
 ADMIN_PASSWORD = os.getenv("KEYCLOAK_ADMIN_PASSWORD", "admin")
@@ -97,6 +106,125 @@ class Admin:
             client["attributes"] = attributes
             await self.request("PUT", f"/admin/realms/{REALM}/clients/{client['id']}", json=client)
         return client
+
+    async def ensure_skill_oauth(self) -> None:
+        base = f"/admin/realms/{REALM}"
+        existing = {
+            row["name"]: row for row in (await self.request("GET", f"{base}/client-scopes")).json()
+        }
+        for name, audiences in SCOPE_AUDIENCES.items():
+            payload = scope_representation(name, audiences)
+            if name not in existing:
+                await self.request("POST", f"{base}/client-scopes", json=payload)
+            else:
+                path = f"{base}/client-scopes/{existing[name]['id']}"
+                await self.request("PUT", path, json=payload)
+                # Updating a scope representation does not reconcile its child mappers.
+                rows = (await self.request("GET", f"{path}/protocol-mappers/models")).json()
+                expected_names = {mapper["name"] for mapper in payload["protocolMappers"]}
+                for row in rows:
+                    if row["name"].startswith("audience-") and row["name"] not in expected_names:
+                        await self.request("DELETE", f"{path}/protocol-mappers/models/{row['id']}")
+                for mapper in payload["protocolMappers"]:
+                    old = next((r for r in rows if r["name"] == mapper["name"]), None)
+                    if old:
+                        await self.request(
+                            "PUT",
+                            f"{path}/protocol-mappers/models/{old['id']}",
+                            json={**mapper, "id": old["id"]},
+                        )
+                    else:
+                        await self.request("POST", f"{path}/protocol-mappers/models", json=mapper)
+        scopes = {
+            row["name"]: row for row in (await self.request("GET", f"{base}/client-scopes")).json()
+        }
+        for name, allowed in CLIENT_SCOPES.items():
+            settings = {"fullScopeAllowed": False}
+            if name != "bank-mcp":
+                settings.update(
+                    publicClient=False,
+                    serviceAccountsEnabled=True,
+                    standardFlowEnabled=False,
+                    directAccessGrantsEnabled=False,
+                    secret=os.getenv(
+                        f"KEYCLOAK_{name.upper().replace('-', '_')}_SECRET", f"{name}-secret"
+                    ),
+                )
+            client = await self.ensure_client(name, **settings)
+            await self.ensure_client_attribute(client, "standard.token.exchange.enabled", "true")
+            mapper = customer_mapper()
+            await self.ensure_mapper(
+                client, mapper["name"], mapper["protocolMapper"], mapper["config"]
+            )
+            path = f"{base}/clients/{client['id']}"
+            for kind in ("default", "optional"):
+                assigned = (await self.request("GET", f"{path}/{kind}-client-scopes")).json()
+                for scope in assigned:
+                    if kind == "default" or scope["name"] not in allowed:
+                        await self.request("DELETE", f"{path}/{kind}-client-scopes/{scope['id']}")
+            for scope in allowed:
+                await self.request("PUT", f"{path}/optional-client-scopes/{scopes[scope]['id']}")
+        ui = await self.client_representation("bank-ui")
+        for name in ("operations-skill", "investment-skill", "travel-skill"):
+            await self.ensure_mapper(
+                ui,
+                f"audience-{name}",
+                "oidc-audience-mapper",
+                {"included.client.audience": name, "access.token.claim": "true"},
+            )
+        banking = await self.client_representation("banking-agent")
+        await self.ensure_client_attribute(banking, "standard.token.exchange.enabled", "false")
+        path = f"{base}/clients/{banking['id']}/optional-client-scopes"
+        for scope in (await self.request("GET", path)).json():
+            if scope["name"] in SCOPE_AUDIENCES:
+                await self.request("DELETE", f"{path}/{scope['id']}")
+        for obsolete in ("operations-mcp", "investment-mcp"):
+            if await self.client_representation(obsolete):
+                await self.ensure_client(obsolete, enabled=False)
+        for name, audience in [
+            ("travel-skill", "travel-agent"),
+            ("investment-skill", "duckduckgo-mcp"),
+        ]:
+            client = await self.client_representation(name)
+            await self.ensure_mapper(
+                client,
+                f"audience-{audience}",
+                "oidc-audience-mapper",
+                {"included.client.audience": audience, "access.token.claim": "true"},
+            )
+
+    async def ensure_oidc_identity(self) -> None:
+        """Restore mandatory subject and standard UI identity scopes, never resource scopes."""
+        mapper = subject_mapper()
+        for name in TOKEN_CLIENTS:
+            client = await self.client_representation(name)
+            if client:
+                await self.ensure_mapper(
+                    client, mapper["name"], mapper["protocolMapper"], mapper["config"]
+                )
+        base = f"/admin/realms/{REALM}"
+        existing = {
+            row["name"]: row for row in (await self.request("GET", f"{base}/client-scopes")).json()
+        }
+        standard = (await self.request("GET", "/admin/realms/master/client-scopes")).json()
+        for name in ("profile", "email"):
+            if name not in existing:
+                source = next(row for row in standard if row["name"] == name)
+                scope = (
+                    await self.request("GET", f"/admin/realms/master/client-scopes/{source['id']}")
+                ).json()
+                scope.pop("id", None)
+                for item in scope.get("protocolMappers", []):
+                    item.pop("id", None)
+                await self.request("POST", f"{base}/client-scopes", json=scope)
+        scopes = {
+            row["name"]: row for row in (await self.request("GET", f"{base}/client-scopes")).json()
+        }
+        ui = await self.client_representation("bank-ui")
+        for name in ("profile", "email"):
+            await self.request(
+                "PUT", f"{base}/clients/{ui['id']}/optional-client-scopes/{scopes[name]['id']}"
+            )
 
     async def ensure_user(self, item: dict[str, Any]) -> None:
         users = (
@@ -286,6 +414,8 @@ async def configure() -> None:
                 "access.token.claim": "true",
             },
         )
+        await admin.ensure_skill_oauth()
+        await admin.ensure_oidc_identity()
         await admin.ensure_user_profile()
         for user in (
             {

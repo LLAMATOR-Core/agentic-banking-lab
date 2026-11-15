@@ -11,7 +11,7 @@ const state = {
   pendingConfirmation: null,
   dashboard: null,
 };
-const welcomeMessage = "Здравствуйте! Помогу со счетами, операциями, инвестициями и планированием поездки.";
+const welcomeMessage = "Здравствуйте! Помогу разобраться в расходах, обсудить инвестиции и спланировать поездку.";
 sessionStorage.setItem("bank.conversation", state.conversationId);
 
 const $ = (id) => document.getElementById(id);
@@ -104,7 +104,10 @@ async function api(path, options = {}) {
 }
 
 async function loadDashboard() {
-  const data = await api("/v1/dashboard");
+  const [data, health] = await Promise.all([api("/v1/dashboard"), api("/health")]);
+  const transferEnabled = health.agent_mode === "legacy";
+  $("prepare-transfer").disabled = !transferEnabled;
+  $("prepare-transfer").title = transferEnabled ? "" : "В этом режиме доступны анализ операций, портфеля и планирование поездки";
   state.dashboard = data;
   const firstName = data.customer.full_name.split(" ")[1] || data.customer.full_name;
   $("greeting").textContent = `Добрый день, ${firstName}`;

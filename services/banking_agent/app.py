@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from services.banking_agent.clients import MemoryClient, TravelA2AClient
 from services.banking_agent.graph import BankingGraph
+from services.banking_agent.orchestrator import OrchestratorGraph
 from services.banking_agent.skills import BankingSkills
 from services.common.auth import Principal, ServiceTokenProvider, require_principal
 from services.common.llm import LLMClient, install_llm_error_handlers
@@ -26,14 +27,28 @@ from services.common.schemas import (
     SharedMemoryWrite,
     VulnerableAbsRead,
 )
-from services.common.tracing import observation, public_trace_config, traced
+from services.common.skill_contract import Experiment
+from services.common.tracing import (
+    experiment_context,
+    install_experiment_middleware,
+    observation,
+    public_trace_config,
+    traced,
+)
 
 tokens = ServiceTokenProvider()
 memory = MemoryClient(tokens)
 travel = TravelA2AClient(tokens)
 llm = LLMClient("banking-agent")
 skills = BankingSkills(memory, travel, tokens, llm)
-banking_graph = BankingGraph(memory, skills, llm)
+AGENT_MODE = os.getenv("BANKING_AGENT_MODE", "orchestrator")
+if AGENT_MODE not in {"orchestrator", "legacy"}:
+    raise ValueError("BANKING_AGENT_MODE must be orchestrator or legacy")
+banking_graph = (
+    OrchestratorGraph(llm, memory)
+    if AGENT_MODE == "orchestrator"
+    else BankingGraph(memory, skills, llm)
+)
 abs_mcp = MCPClient(os.getenv("ABS_MCP_URL", "http://abs-mcp:8101/mcp"))
 abs_mcp_vulnerable = MCPClient(
     os.getenv("ABS_MCP_VULNERABLE_URL", "http://abs-mcp-vulnerable:8104/mcp")
@@ -41,6 +56,7 @@ abs_mcp_vulnerable = MCPClient(
 
 app = FastAPI(title="Banking LangGraph Agent", version="0.1.0")
 install_llm_error_handlers(app)
+install_experiment_middleware(app, accept_remote_parent=False)
 
 
 @app.exception_handler(httpx.TimeoutException)
@@ -84,6 +100,7 @@ async def health() -> dict[str, Any]:
         "service": "banking-agent",
         "llm": llm.public_config(),
         "abs_mcp_mode": skills.abs_mcp_mode,
+        "agent_mode": AGENT_MODE,
         "observability": public_trace_config(),
     }
 
@@ -159,6 +176,7 @@ async def chat(
     user_id = _customer_id(caller)
     access_token = authorization.split(" ", 1)[1]
     graph_input = {
+        "experiment": (request.experiment or Experiment(run_id=str(uuid.uuid4()))).model_dump(),
         "message": request.message,
         "user_id": user_id,
         "conversation_id": request.conversation_id,
@@ -170,14 +188,17 @@ async def chat(
         "tool_calls": [],
         "data": {},
     }
-    with observation(
-        "banking-agent.turn",
-        input=graph_input,
-        metadata={"agent_id": "banking-agent"},
-        user_id=user_id,
-        session_id=request.conversation_id,
-        agent_id="banking-agent",
-    ) as span:
+    with (
+        experiment_context(graph_input["experiment"]),
+        observation(
+            "banking-agent.turn",
+            input=graph_input,
+            metadata={"agent_id": "banking-agent"},
+            user_id=user_id,
+            session_id=request.conversation_id,
+            agent_id="banking-agent",
+        ) as span,
+    ):
         try:
             result = await banking_graph.graph.ainvoke(graph_input)
         except ValueError as exc:
@@ -185,6 +206,7 @@ async def chat(
         span.update(output=result)
     result.setdefault("data", {})["connections"] = {
         "abs_mcp_mode": skills.abs_mcp_mode,
+        "agent_mode": AGENT_MODE,
         "selected_customer_id": result.get("abs_customer_id"),
     }
     return ChatResponse(
