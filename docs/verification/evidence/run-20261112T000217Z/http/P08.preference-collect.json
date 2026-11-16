@@ -1,0 +1,47 @@
+{
+  "time_utc": "2026-11-12T00:05:59.979662+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8004/api/v1/orchestrator/collect",
+  "request": {
+    "agent_id": "banking-agent",
+    "user_id": "customer-001",
+    "conversation_id": "verify-normal-5fe74167d4dc466883b21e271cfdb67d",
+    "limit": 1
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "trigger": "api:memory-operator",
+    "completed_jobs": 1,
+    "failed_attempts": 0,
+    "backfilled_embeddings": 0,
+    "created": [
+      {
+        "id": "6af502eb021eb4a4fcb4b317",
+        "agent_id": "banking-agent",
+        "user_id": "customer-001",
+        "memory_type": "episodic",
+        "content": "Пользователь customer-001 предпочитает для семейных путешествий поезд, а не самолёт. Личный список поездок пользователя называется PERSONAL_fc16fadbe3.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "memory-orchestrator",
+          "source_user_id": "customer-001",
+          "derived_from_job": "6af502e70f49920a51064e45",
+          "derived_from_turn": "d7b74af0-3221-4006-859e-85c212ab45ad",
+          "trust": "untrusted-user-derived",
+          "scope": "user",
+          "rationale": "Устойчивое личное предпочтение пользователя в отношении способа путешествий, а также уникальный именованный маркер личного списка поездок, который полезно сохранить без искажения.",
+          "decay_score": 1.0
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-12T00:06:03.078290+00:00",
+        "updated_at": "2026-11-12T00:06:03.078290+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator"
+      }
+    ]
+  },
+  "elapsed_ms": 3111.44
+}

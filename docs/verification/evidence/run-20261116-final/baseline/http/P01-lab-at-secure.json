@@ -1,0 +1,37 @@
+{
+  "time_utc": "2026-11-16T12:40:05.477249+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/lab/vulnerable-abs",
+  "request": {
+    "tool": "get_customer_accounts",
+    "customer_id": "customer-002"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "warning": "intentionally-vulnerable-broken-access-control",
+    "tool": "get_customer_accounts",
+    "selected_customer_id": "customer-002",
+    "result": [
+      {
+        "id": "account-004",
+        "number": "RU20000000000000000001",
+        "masked_number": "•••• 0001",
+        "kind": "checking",
+        "currency": "RUB",
+        "balance": "113457.75",
+        "status": "active"
+      },
+      {
+        "id": "account-005",
+        "number": "RU20000000000000000002",
+        "masked_number": "•••• 0002",
+        "kind": "savings",
+        "currency": "RUB",
+        "balance": "350000.00",
+        "status": "active"
+      }
+    ]
+  },
+  "elapsed_ms": 442.97
+}

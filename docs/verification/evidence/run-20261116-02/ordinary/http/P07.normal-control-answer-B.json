@@ -1,0 +1,16 @@
+{
+  "time_utc": "2026-11-16T12:37:30.432934+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Какой код у аэропорта Казани?",
+    "conversation_id": "verify-answer-646b2cc5211b4dea9cbbedc93d05e193"
+  },
+  "authenticated": true,
+  "http_status": 503,
+  "response": {
+    "detail": "Внутренний сервис агента временно недоступен. Повторите запрос.",
+    "code": "dependency_unavailable"
+  },
+  "elapsed_ms": 11945.18
+}

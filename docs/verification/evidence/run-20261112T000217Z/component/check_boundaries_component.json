@@ -1,0 +1,639 @@
+{
+  "scope": "Component integration; routing/UI bypassed; fault and egress interception explicitly injected.",
+  "checks": [
+    {
+      "case": "P11.memory-before-execution",
+      "result": null,
+      "error": "ConnectError: Injected memory client failure",
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245310.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113457.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245310.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113457.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "debit": "0.00",
+      "credit": "0.00"
+    },
+    {
+      "case": "P11.memory-after-execution",
+      "result": null,
+      "error": "ConnectError: Injected memory client failure",
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245310.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113457.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245309.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113458.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "debit": "1.00",
+      "credit": "1.00"
+    },
+    {
+      "case": "P11.retry-after-failure",
+      "result": {
+        "response": "Операция выполнена. Статус: completed.",
+        "data": {
+          "result": {
+            "status": "completed",
+            "operation_id": "63ab5c80-be4a-431a-a506-759f281490e4",
+            "from_account": "RU10000000000000000001",
+            "to_account": "RU20000000000000000001",
+            "amount": "1.00",
+            "currency": "RUB",
+            "balance_after": "245309.40"
+          }
+        },
+        "tool_calls": [
+          "memory.read_pending_action",
+          "abs.create_transfer",
+          "memory.mark_executed"
+        ]
+      },
+      "error": null,
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245309.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113458.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245309.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113458.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "debit": "0.00",
+      "credit": "0.00"
+    },
+    {
+      "case": "P11.repeat-after-recovery",
+      "result": {
+        "response": "Эта операция уже была выполнена; повторного списания не произошло.",
+        "data": {
+          "result": {
+            "status": "completed",
+            "operation_id": "63ab5c80-be4a-431a-a506-759f281490e4",
+            "from_account": "RU10000000000000000001",
+            "to_account": "RU20000000000000000001",
+            "amount": "1.00",
+            "currency": "RUB",
+            "balance_after": "245309.40"
+          }
+        },
+        "tool_calls": [
+          "memory.read_pending_action"
+        ]
+      },
+      "error": null,
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245309.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113458.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245309.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113458.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "debit": "0.00",
+      "credit": "0.00"
+    }
+  ],
+  "prepared": {
+    "response": "Подготовлена операция: перевод 1.00 со счёта account-001 на RU20000000000000000001. Проверьте параметры и подтвердите отдельно. Подтверждение действует 15 минут.",
+    "data": {
+      "pending_action": {
+        "type": "transfer",
+        "parameters": {
+          "description": "Verification fault recovery",
+          "from_account": "account-001",
+          "amount": "1.00",
+          "to_account": "RU20000000000000000001"
+        }
+      }
+    },
+    "requires_confirmation": true,
+    "confirmation_id": "6af502560f49920a51064e42",
+    "tool_calls": [
+      "memory.create_pending_action"
+    ]
+  },
+  "pending_after_failure": {
+    "agent_id": "banking-agent",
+    "user_id": "customer-001",
+    "memory_type": "working",
+    "content": "Pending financial action: transfer",
+    "payload": null,
+    "conversation_id": "verify-fault-b5caf56e25074d29981d6445661bdfee",
+    "metadata": {
+      "record_kind": "pending-action",
+      "status": "pending",
+      "action_type": "transfer",
+      "parameters": {
+        "description": "Verification fault recovery",
+        "from_account": "account-001",
+        "amount": "1.00",
+        "to_account": "RU20000000000000000001"
+      }
+    },
+    "embedding_model": null,
+    "expires_at": "2026-11-12T00:18:34.296000+00:00",
+    "created_at": "2026-11-12T00:03:34.358000+00:00",
+    "updated_at": "2026-11-12T00:03:34.358000+00:00",
+    "schema_version": 2,
+    "created_by": "banking-agent",
+    "id": "6af502560f49920a51064e42"
+  },
+  "action_after_recovery": {
+    "agent_id": "banking-agent",
+    "user_id": "customer-001",
+    "memory_type": "working",
+    "content": "Pending financial action: transfer",
+    "payload": null,
+    "conversation_id": "verify-fault-b5caf56e25074d29981d6445661bdfee",
+    "metadata": {
+      "record_kind": "pending-action",
+      "status": "executed",
+      "action_type": "transfer",
+      "parameters": {
+        "description": "Verification fault recovery",
+        "from_account": "account-001",
+        "amount": "1.00",
+        "to_account": "RU20000000000000000001"
+      },
+      "executed_at": "2026-11-12T00:03:35.868330+00:00",
+      "result": {
+        "status": "completed",
+        "operation_id": "63ab5c80-be4a-431a-a506-759f281490e4",
+        "from_account": "RU10000000000000000001",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "currency": "RUB",
+        "balance_after": "245309.40"
+      }
+    },
+    "embedding_model": null,
+    "expires_at": "2026-11-12T00:18:34.296000+00:00",
+    "created_at": "2026-11-12T00:03:34.358000+00:00",
+    "updated_at": "2026-11-12T00:03:35.888000+00:00",
+    "schema_version": 2,
+    "created_by": "banking-agent",
+    "id": "6af502560f49920a51064e42"
+  },
+  "compensation": {
+    "status": "completed",
+    "operation_id": "3c2d3305-a76b-435d-9d32-cf934c52f1b0",
+    "from_account": "RU20000000000000000001",
+    "to_account": "RU10000000000000000001",
+    "amount": "1.00",
+    "currency": "RUB",
+    "balance_after": "113457.75"
+  },
+  "balances_restored": true,
+  "marker": "SYNTHETIC_PRIVATE_deebcfd2b2",
+  "outbound_http_dispatch": [
+    {
+      "url": "http://travel-api:8003/a2a/v1/message:send",
+      "json": {
+        "message": {
+          "role": "ROLE_USER",
+          "parts": [
+            {
+              "data": {
+                "request_type": "destination_info",
+                "user_query": "SYNTHETIC_PRIVATE_deebcfd2b2",
+                "adults": 1,
+                "currency": "RUB",
+                "interests": [],
+                "destination": "Казань",
+                "extra": {
+                  "private_note": "SYNTHETIC_PRIVATE_deebcfd2b2"
+                },
+                "missing_fields": [],
+                "user_id": "customer-001"
+              },
+              "mediaType": "application/json"
+            }
+          ],
+          "messageId": "6822245d-8b0b-44e7-a0c5-c61e42a0e189",
+          "contextId": "verify-egress-ab0974158b6141bb88dd49304f8fdf25"
+        }
+      }
+    },
+    {
+      "url": "http://duckduckgo-mcp:8105/mcp",
+      "json": {
+        "jsonrpc": "2.0",
+        "id": "ea57b72d-6386-462d-8df2-314bbc7cbeac",
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "agentic-banking",
+            "version": "0.1.0"
+          }
+        }
+      }
+    }
+  ],
+  "llm_dispatch_synthetic_only": [
+    {
+      "model": "deepseek-flash",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Classify the request.\n\nВерни только один JSON-объект без Markdown. Он обязан соответствовать JSON Schema: {\"properties\": {\"intent\": {\"enum\": [\"profile\", \"accounts\", \"operations\", \"investments\", \"travel\", \"action\", \"general\"], \"title\": \"Intent\", \"type\": \"string\"}, \"rationale\": {\"maxLength\": 2000, \"title\": \"Rationale\", \"type\": \"string\"}}, \"required\": [\"intent\", \"rationale\"], \"title\": \"IntentDecision\", \"type\": \"object\"}"
+        },
+        {
+          "role": "user",
+          "content": "{\"user_message\": \"Поездка SYNTHETIC_PRIVATE_deebcfd2b2\", \"nested\": {\"private_note\": \"SYNTHETIC_PRIVATE_deebcfd2b2\", \"access_token\": \"SYNTHETIC_TOKEN\"}}"
+        }
+      ],
+      "response_format": {
+        "type": "json_object"
+      }
+    }
+  ],
+  "trace_serialization": {
+    "message": "Личная фраза SYNTHETIC_PRIVATE_deebcfd2b2",
+    "nested": {
+      "private_note": "SYNTHETIC_PRIVATE_deebcfd2b2",
+      "access_token": "[REDACTED]"
+    },
+    "encoded": "{\"password\": \"[REDACTED]\", \"private_note\": \"SYNTHETIC_PRIVATE_deebcfd2b2\"}"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "time_utc": "2026-11-16T12:42:41.052958+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Запомни моё личное предпочтение: для семейных путешествий я всегда выбираю поезд, а не самолёт. Мой личный список поездок называется PERSONAL_cd4f5ced8c.",
+    "conversation_id": "verify-normal-705a70a6e8034152bd0544b784300da1"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "message": "Уточните, пожалуйста, куда и когда вы хотите поехать (город отправления и назначения, даты), чтобы я подобрал варианты поездки.",
+    "conversation_id": "verify-normal-705a70a6e8034152bd0544b784300da1",
+    "intent": "travel",
+    "tool_calls": [
+      "abs.get_customer_info",
+      "llm.route_intent",
+      "llm.extract_travel_request"
+    ],
+    "requires_confirmation": false,
+    "confirmation_id": null,
+    "data": {
+      "missing_fields": [
+        "destination",
+        "origin",
+        "destination_airport",
+        "departure_date",
+        "return_date"
+      ],
+      "connections": {
+        "abs_mcp_mode": "secure",
+        "selected_customer_id": null
+      }
+    }
+  },
+  "elapsed_ms": 8392.91
+}

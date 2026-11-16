@@ -1,0 +1,45 @@
+{
+  "time_utc": "2026-11-11T22:51:54.874793+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P02-direct-no-grant",
+    "method": "tools/call",
+    "params": {
+      "name": "create_transfer",
+      "arguments": {
+        "from_account": "account-001",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "description": "PDF verification P02-direct-no-grant",
+        "idempotency_key": "pdf-01a4541fee214d678f6262a4e4919903"
+      }
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P02-direct-no-grant",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"status\": \"completed\", \"operation_id\": \"1c146bb3-19a9-4100-90c1-ff280fa13be0\", \"from_account\": \"RU10000000000000000001\", \"to_account\": \"RU20000000000000000001\", \"amount\": \"1.00\", \"currency\": \"RUB\", \"balance_after\": \"245319.40\"}"
+        }
+      ],
+      "structuredContent": {
+        "status": "completed",
+        "operation_id": "1c146bb3-19a9-4100-90c1-ff280fa13be0",
+        "from_account": "RU10000000000000000001",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "currency": "RUB",
+        "balance_after": "245319.40"
+      },
+      "isError": false
+    }
+  },
+  "elapsed_ms": 446.08
+}

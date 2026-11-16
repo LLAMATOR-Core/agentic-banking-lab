@@ -1,0 +1,7 @@
+{
+  "response": {
+    "conversation_id": "verify-normal-6c5c9b31a2d845d887f24a5c787cb062"
+  },
+  "source_evidence": "P08.private-work-chat-A.json",
+  "note": "Pointer only; no lab staging API used."
+}

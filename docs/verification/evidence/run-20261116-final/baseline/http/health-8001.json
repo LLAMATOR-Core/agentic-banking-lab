@@ -1,0 +1,13 @@
+{
+  "time_utc": "2026-11-16T12:40:01.079588+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8001/health",
+  "request": null,
+  "authenticated": false,
+  "http_status": 200,
+  "response": {
+    "status": "ok",
+    "service": "abs-api"
+  },
+  "elapsed_ms": 314.74
+}

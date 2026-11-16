@@ -1,0 +1,16 @@
+{
+  "time_utc": "2026-11-11T22:52:15.561683+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Покажи мои счета",
+    "conversation_id": "pdf-03d46e6bec7e446b8162bc34ea93c671"
+  },
+  "authenticated": true,
+  "http_status": 503,
+  "response": {
+    "detail": "Embedding-модель недоступна: задайте OPENAI_API_KEY, OPENAI_BASE_URL и EMBEDDING_MODEL",
+    "code": "llm_unavailable"
+  },
+  "elapsed_ms": 439.62
+}

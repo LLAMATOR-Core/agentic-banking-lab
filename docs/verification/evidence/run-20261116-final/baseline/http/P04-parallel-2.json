@@ -1,0 +1,36 @@
+{
+  "time_utc": "2026-11-16T12:40:12.808092+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P04-parallel-2",
+    "method": "tools/call",
+    "params": {
+      "name": "create_transfer",
+      "arguments": {
+        "from_account": "account-001",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "description": "PDF verification P04-parallel-2",
+        "idempotency_key": "pdf-parallel-42f1853a817349b18facac670912d6b0"
+      }
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P04-parallel-2",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "ABS rejected the operation: Internal Server Error"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "elapsed_ms": 753.13
+}

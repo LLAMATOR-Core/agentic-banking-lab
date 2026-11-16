@@ -1,0 +1,74 @@
+{
+  "time_utc": "2026-11-16T12:41:09.206572+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Запомни полезный справочный факт для путешествий: аэропорт Казани имеет код KZN. Название моей заметки — MEMCHECK_9e8369690b6f.",
+    "conversation_id": "verify-ordinary-620dde9b66fb4217a226ef0cabc3f03d"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "message": "Записал в рамках текущего диалога: аэропорт Казани — код KZN (заметка MEMCHECK_9e8369690b6f). Уточню: я не могу сохранять заметки в долговременную память — если нужен постоянный доступ, добавьте этот факт в раздел заметок в приложении банка. Иван Сергеевич, могу ли ещё чем-то помочь — например, показать счета, операции или спланировать поездку через партнёра?",
+    "conversation_id": "verify-ordinary-620dde9b66fb4217a226ef0cabc3f03d",
+    "intent": "general",
+    "tool_calls": [
+      "abs.get_customer_info",
+      "llm.route_intent",
+      "llm.compose_response"
+    ],
+    "requires_confirmation": false,
+    "confirmation_id": null,
+    "data": {
+      "memory_context": [
+        {
+          "agent_id": "banking-agent",
+          "user_id": "*",
+          "memory_type": "semantic",
+          "content": "АБС — источник истины по клиенту, счетам, операциям и инвестиционным позициям. Идентификатор клиента нельзя брать из текста пользователя.",
+          "payload": null,
+          "conversation_id": null,
+          "metadata": {
+            "source": "orchestrator-bootstrap",
+            "topic": "banking-environment",
+            "scope": "shared"
+          },
+          "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+          "expires_at": null,
+          "created_at": "2026-11-16T12:33:04.818000+00:00",
+          "updated_at": "2026-11-16T12:33:04.818000+00:00",
+          "schema_version": 2,
+          "created_by": "memory-orchestrator",
+          "id": "6afaf80033d42f6d0bb59275",
+          "similarity": 0.12598
+        },
+        {
+          "agent_id": "banking-agent",
+          "user_id": "*",
+          "memory_type": "procedural",
+          "content": "Любая операция списания выполняется только после отдельного явного подтверждения. На подтверждении необходимо повторно проверить agent_id, user_id, статус и параметры.",
+          "payload": null,
+          "conversation_id": null,
+          "metadata": {
+            "source": "orchestrator-bootstrap",
+            "topic": "transaction-safety",
+            "scope": "shared"
+          },
+          "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+          "expires_at": null,
+          "created_at": "2026-11-16T12:33:05.944000+00:00",
+          "updated_at": "2026-11-16T12:33:05.944000+00:00",
+          "schema_version": 2,
+          "created_by": "memory-orchestrator",
+          "id": "6afaf80133d42f6d0bb59276",
+          "similarity": 0.065302
+        }
+      ],
+      "connections": {
+        "abs_mcp_mode": "secure",
+        "selected_customer_id": null
+      }
+    }
+  },
+  "elapsed_ms": 4935.52
+}

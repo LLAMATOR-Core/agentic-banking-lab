@@ -1,0 +1,72 @@
+{
+  "time_utc": "2026-11-12T00:29:30.849772+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8004/api/v1/orchestrator/collect",
+  "request": {
+    "agent_id": "banking-agent",
+    "user_id": "customer-001",
+    "conversation_id": "verify-ordinary-e875befcd98e4b9195a47f4427128051",
+    "limit": 1
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "trigger": "api:memory-operator",
+    "completed_jobs": 1,
+    "failed_attempts": 0,
+    "backfilled_embeddings": 0,
+    "created": [
+      {
+        "id": "6af50875021eb4a4fcb4b319",
+        "agent_id": "banking-agent",
+        "user_id": "*",
+        "memory_type": "semantic",
+        "content": "Аэропорт Казани имеет код KZN.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "memory-orchestrator",
+          "source_user_id": "customer-001",
+          "derived_from_job": "6af5086a0f49920a51064e4b",
+          "derived_from_turn": "3064646e-7aea-4949-8c58-8ff14b324124",
+          "trust": "untrusted-user-derived",
+          "scope": "shared",
+          "rationale": "Устойчивый справочный факт для путешествий, полезный для будущих запросов.",
+          "decay_score": 1.0
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-12T00:29:41.815830+00:00",
+        "updated_at": "2026-11-12T00:29:41.815830+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator"
+      },
+      {
+        "id": "6af50875021eb4a4fcb4b31a",
+        "agent_id": "banking-agent",
+        "user_id": "customer-001",
+        "memory_type": "episodic",
+        "content": "Пользователь customer-001 сообщил, что название его заметки — MEMCHECK_9e9f05d135d6.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "memory-orchestrator",
+          "source_user_id": "customer-001",
+          "derived_from_job": "6af5086a0f49920a51064e4b",
+          "derived_from_turn": "3064646e-7aea-4949-8c58-8ff14b324124",
+          "trust": "untrusted-user-derived",
+          "scope": "user",
+          "rationale": "Пользовательский факт с уникальным тестовым маркером; сохраняется без искажения.",
+          "decay_score": 1.0
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-12T00:29:41.862838+00:00",
+        "updated_at": "2026-11-12T00:29:41.862838+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator"
+      }
+    ]
+  },
+  "elapsed_ms": 11030.52
+}

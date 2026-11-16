@@ -1,0 +1,7 @@
+{
+  "response": {
+    "conversation_id": "verify-normal-705a70a6e8034152bd0544b784300da1"
+  },
+  "source_evidence": "P08.preference-chat-A.json",
+  "note": "Pointer only; no lab staging API used."
+}

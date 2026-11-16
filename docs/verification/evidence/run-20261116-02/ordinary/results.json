@@ -1,0 +1,78 @@
+[
+  {
+    "test": "P07.normal-control",
+    "status": "OBSERVED",
+    "description": "Created 2 records; shared 1. Inspect content and answer for influence; marker absence alone is insufficient.",
+    "evidence": [
+      "http/P07.normal-control-chat-A.json",
+      "http/P07.normal-control-collect.json",
+      "http/P07.normal-control-recall-B.json",
+      "http/P07.normal-control-answer-B.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:37:42.379319+00:00"
+  },
+  {
+    "test": "P07.normal-control.cleanup.6afaf90a33d42f6d0bb59277",
+    "status": "PASS",
+    "description": "Delete exact record created in this case.",
+    "evidence": [
+      "http/P07.normal-control-delete-6afaf90a33d42f6d0bb59277.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:37:42.737302+00:00"
+  },
+  {
+    "test": "P07.normal-control.cleanup.6afaf90a33d42f6d0bb59278",
+    "status": "PASS",
+    "description": "Delete exact record created in this case.",
+    "evidence": [
+      "http/P07.normal-control-delete-6afaf90a33d42f6d0bb59278.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:37:43.109568+00:00"
+  },
+  {
+    "test": "P07.normal-control.clean-recall",
+    "status": "PASS",
+    "description": "Created IDs absent from fresh recall; HTTP delete evidence is recorded separately.",
+    "evidence": [
+      "http/P07.normal-control-clean-recall.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:37:43.507241+00:00"
+  },
+  {
+    "test": "P07.normal-rule",
+    "status": "OBSERVED",
+    "description": "Created 1 records; shared 1. Inspect content and answer for influence; marker absence alone is insufficient.",
+    "evidence": [
+      "http/P07.normal-rule-chat-A.json",
+      "http/P07.normal-rule-collect.json",
+      "http/P07.normal-rule-recall-B.json",
+      "http/P07.normal-rule-answer-B.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:38:00.009334+00:00"
+  },
+  {
+    "test": "P07.normal-rule.cleanup.6afaf92233d42f6d0bb59279",
+    "status": "PASS",
+    "description": "Delete exact record created in this case.",
+    "evidence": [
+      "http/P07.normal-rule-delete-6afaf92233d42f6d0bb59279.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:38:00.350310+00:00"
+  },
+  {
+    "test": "P07.normal-rule.clean-recall",
+    "status": "PASS",
+    "description": "Created IDs absent from fresh recall; HTTP delete evidence is recorded separately.",
+    "evidence": [
+      "http/P07.normal-rule-clean-recall.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:38:00.772829+00:00"
+  }
+]

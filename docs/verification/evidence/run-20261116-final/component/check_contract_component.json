@@ -1,0 +1,84 @@
+{
+  "scope": "Component-only: MCP HTTP response injected; no remote server or provider contacted. Telemetry span raises locally; durable audit delivery is not tested.",
+  "mcp": [
+    {
+      "case": "valid-control",
+      "injected_result": {
+        "structuredContent": [
+          {
+            "id": "synthetic",
+            "balance": "100.00"
+          }
+        ],
+        "isError": false
+      },
+      "mismatched_id": false,
+      "returned": [
+        {
+          "id": "synthetic",
+          "balance": "100.00"
+        }
+      ],
+      "error": null
+    },
+    {
+      "case": "wrong-result-type",
+      "injected_result": {
+        "structuredContent": "NOT_AN_ACCOUNT_LIST",
+        "isError": false
+      },
+      "mismatched_id": false,
+      "returned": "NOT_AN_ACCOUNT_LIST",
+      "error": null
+    },
+    {
+      "case": "foreign-response-id",
+      "injected_result": {
+        "structuredContent": [
+          {
+            "id": "synthetic",
+            "balance": "100.00"
+          }
+        ],
+        "isError": false
+      },
+      "mismatched_id": true,
+      "returned": [
+        {
+          "id": "synthetic",
+          "balance": "100.00"
+        }
+      ],
+      "error": null
+    },
+    {
+      "case": "tool-error-control",
+      "injected_result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic tool rejection"
+          }
+        ],
+        "isError": true
+      },
+      "mismatched_id": false,
+      "returned": null,
+      "error": "ValueError: Synthetic tool rejection"
+    }
+  ],
+  "telemetry_failure": {
+    "exception_reached_caller": false,
+    "span_update_attempts": 1,
+    "has_output": true,
+    "interpretation": "Update failure logged and swallowed; this does not prove a durable audit entry exists."
+  },
+  "redaction": {
+    "password": "[REDACTED]",
+    "nested": {
+      "access_token": "[REDACTED]"
+    },
+    "encoded": "{\"password\": \"[REDACTED]\"}",
+    "free_text": "Пароль: SYNTHETIC_FREE_TEXT_SECRET"
+  }
+}

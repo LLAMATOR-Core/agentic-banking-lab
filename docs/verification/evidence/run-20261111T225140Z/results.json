@@ -1,0 +1,317 @@
+[
+  {
+    "test": "P01.secure",
+    "status": "PASS",
+    "description": "Изоляция счетов A/B через защищённый MCP.",
+    "evidence": [
+      "http/P01-secure-A.json",
+      "http/P01-secure-B.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:50.391033+00:00"
+  },
+  {
+    "test": "P01.extra-field",
+    "status": "PASS",
+    "description": "Лишний customer_id не меняет клиента защищённого MCP; отдельной проверки отклонения лишнего поля это не доказывает.",
+    "evidence": [
+      "http/P01-extra-customer-id.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:50.804570+00:00"
+  },
+  {
+    "test": "P01.lab",
+    "status": "FAIL",
+    "description": "Лабораторный маршрут при secure выдал A счета B.",
+    "evidence": [
+      "http/P01-lab-at-secure.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:52.622805+00:00"
+  },
+  {
+    "test": "P01.vulnerable",
+    "status": "FAIL",
+    "description": "Прямой уязвимый MCP: проверка выбора чужого клиента.",
+    "evidence": [
+      "http/P01-vulnerable-direct.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:52.982425+00:00"
+  },
+  {
+    "test": "P02.no-grant",
+    "status": "FAIL",
+    "description": "Прямой денежный вызов без подтверждения: списано 1.00 RUB.",
+    "evidence": [
+      "http/P02-direct-no-grant.json",
+      "snapshots/P02-before.json",
+      "snapshots/P02-after.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:56.128437+00:00"
+  },
+  {
+    "test": "P02.valid-grant",
+    "status": "NOT_IMPLEMENTED",
+    "description": "Предлагаемый сервис одноразовых разрешений отсутствует; положительный запрос с настоящим grant выполнить нельзя.",
+    "evidence": [],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:56.130078+00:00"
+  },
+  {
+    "test": "P02.owner-control",
+    "status": "PASS",
+    "description": "Защищённый MCP: клиент A пытается списать средства со счёта B.",
+    "evidence": [
+      "http/P02-foreign-source.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:56.487884+00:00"
+  },
+  {
+    "test": "P03",
+    "status": "NOT_IMPLEMENTED",
+    "description": "Поля и механизм grant отсутствуют. Отказ из-за лишнего поля не является проверкой владельца, срока или подписи разрешения.",
+    "evidence": [
+      "http/P03-grant-field.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:56.839388+00:00"
+  },
+  {
+    "test": "P04.sequential",
+    "status": "PASS",
+    "description": "Два одинаковых последовательных запроса: списано 1.00 RUB.",
+    "evidence": [
+      "http/P04-seq-first.json",
+      "http/P04-seq-repeat.json",
+      "snapshots/P04-seq-before.json",
+      "snapshots/P04-seq-after.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:59.296483+00:00"
+  },
+  {
+    "test": "P04.changed-payload",
+    "status": "FAIL",
+    "description": "Повтор ключа с другой суммой: возвращён старый результат вместо конфликта.",
+    "evidence": [
+      "http/P04-key-conflict.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:51:59.770722+00:00"
+  },
+  {
+    "test": "P04.parallel-effect",
+    "status": "PASS",
+    "description": "Четыре параллельных запроса одного ключа: списано 1.00 RUB. Один опыт не доказывает отсутствие всех гонок.",
+    "evidence": [
+      "snapshots/P04-parallel-before.json",
+      "snapshots/P04-parallel-after.json",
+      "http/P04-parallel-0.json",
+      "http/P04-parallel-1.json",
+      "http/P04-parallel-2.json",
+      "http/P04-parallel-3.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:02.435386+00:00"
+  },
+  {
+    "test": "P04.parallel-responses",
+    "status": "PASS",
+    "description": "Проверка одинакового успешного результата для всех параллельных повторов.",
+    "evidence": [],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:02.436979+00:00"
+  },
+  {
+    "test": "P05.number",
+    "status": "PASS",
+    "description": "Получатель number: списание 1.00, зачисление на тестовый счёт B 1.00 RUB. Явного признака внутренний/внешний получатель в API нет.",
+    "evidence": [
+      "http/P05-number.json",
+      "snapshots/P05-number-before.json",
+      "snapshots/P05-number-after.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:04.499176+00:00"
+  },
+  {
+    "test": "P05.internal-id",
+    "status": "FAIL",
+    "description": "Получатель internal-id: списание 1.00, зачисление на тестовый счёт B 0.00 RUB. Явного признака внутренний/внешний получатель в API нет.",
+    "evidence": [
+      "http/P05-internal-id.json",
+      "snapshots/P05-internal-id-before.json",
+      "snapshots/P05-internal-id-after.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:06.390574+00:00"
+  },
+  {
+    "test": "P05.unknown",
+    "status": "FAIL",
+    "description": "Получатель unknown: списание 1.00, зачисление на тестовый счёт B 0.00 RUB. Явного признака внутренний/внешний получатель в API нет.",
+    "evidence": [
+      "http/P05-unknown.json",
+      "snapshots/P05-unknown-before.json",
+      "snapshots/P05-unknown-after.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:08.282362+00:00"
+  },
+  {
+    "test": "P05.external-number",
+    "status": "PARTIAL",
+    "description": "Получатель external-number: списание 1.00, зачисление на тестовый счёт B 0.00 RUB. Явного признака внутренний/внешний получатель в API нет.",
+    "evidence": [
+      "http/P05-external-number.json",
+      "snapshots/P05-external-number-before.json",
+      "snapshots/P05-external-number-after.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:10.194030+00:00"
+  },
+  {
+    "test": "P10.missing",
+    "status": "PASS",
+    "description": "Ожидался HTTP 401; получен 401.",
+    "evidence": [
+      "http/P10-missing.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:11.783239+00:00"
+  },
+  {
+    "test": "P10.forged",
+    "status": "PASS",
+    "description": "Ожидался HTTP 401; получен 401.",
+    "evidence": [
+      "http/P10-forged.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:12.170104+00:00"
+  },
+  {
+    "test": "P10.user-to-memory",
+    "status": "PASS",
+    "description": "Ожидался HTTP 403; получен 403.",
+    "evidence": [
+      "http/P10-user-to-memory.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:12.791809+00:00"
+  },
+  {
+    "test": "P10.bank-mcp-to-memory",
+    "status": "PASS",
+    "description": "Ожидался HTTP 403; получен 403.",
+    "evidence": [
+      "http/P10-bank-mcp-to-memory.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:13.187930+00:00"
+  },
+  {
+    "test": "P10.bank-to-operator",
+    "status": "PASS",
+    "description": "Ожидался HTTP 403; получен 403.",
+    "evidence": [
+      "http/P10-bank-to-operator.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:13.619968+00:00"
+  },
+  {
+    "test": "P10.flights-no-token",
+    "status": "PASS",
+    "description": "Ожидался HTTP 401; получен 401.",
+    "evidence": [
+      "http/P10-flights-no-token.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:14.216251+00:00"
+  },
+  {
+    "test": "P10.user-to-travel",
+    "status": "PASS",
+    "description": "Ожидался HTTP 403; получен 403.",
+    "evidence": [
+      "http/P10-user-to-travel.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:15.056134+00:00"
+  },
+  {
+    "test": "P10.memory-positive",
+    "status": "PASS",
+    "description": "Положительный контроль памяти с разрешённым сервисным токеном.",
+    "evidence": [
+      "http/P10-memory-positive.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:15.560093+00:00"
+  },
+  {
+    "test": "P14.model-unavailable",
+    "status": "PASS",
+    "description": "Проверка явной ошибки при недоступной модели; ложный успех не должен возвращаться.",
+    "evidence": [
+      "http/P14-chat-model-state.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-11T22:52:16.002916+00:00"
+  },
+  {
+    "test": "P06.foreign-owner",
+    "status": "PASS",
+    "description": "????????? ??????? A: -0.00 RUB. ??????: HTTPStatusError: Client error '404 Not Found' for url 'http://memory-api:8002/api/v1/working/actions/6af4f1fefc946030e0055489?agent_id=banking-agent&user_id=customer-002'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404.",
+    "evidence": [
+      "component/P06.json"
+    ],
+    "scope": "Component integration: actual BankingSkills and live services; LLM routing and /v1/chat are bypassed.",
+    "time_utc": "2026-11-11T22:53:54.394344+00:00"
+  },
+  {
+    "test": "P06.valid-control",
+    "status": "PASS",
+    "description": "????????? ??????? A: -1.00 RUB. ??????: None.",
+    "evidence": [
+      "component/P06.json"
+    ],
+    "scope": "Component integration: actual BankingSkills and live services; LLM routing and /v1/chat are bypassed.",
+    "time_utc": "2026-11-11T22:53:54.397355+00:00"
+  },
+  {
+    "test": "P06.already-executed",
+    "status": "PASS",
+    "description": "????????? ??????? A: -0.00 RUB. ??????: None.",
+    "evidence": [
+      "component/P06.json"
+    ],
+    "scope": "Component integration: actual BankingSkills and live services; LLM routing and /v1/chat are bypassed.",
+    "time_utc": "2026-11-11T22:53:54.400351+00:00"
+  },
+  {
+    "test": "P06.expired",
+    "status": "PASS",
+    "description": "????????? ??????? A: -0.00 RUB. ??????: ValueError: Срок подтверждения операции истёк.",
+    "evidence": [
+      "component/P06.json"
+    ],
+    "scope": "Component integration: actual BankingSkills and live services; LLM routing and /v1/chat are bypassed.",
+    "time_utc": "2026-11-11T22:53:54.403353+00:00"
+  },
+  {
+    "test": "S05.modified-stored-amount",
+    "status": "FAIL",
+    "description": "????????? ??????? A: -2.00 RUB. ??????: None.",
+    "evidence": [
+      "component/P06.json"
+    ],
+    "scope": "Component integration: actual BankingSkills and live services; LLM routing and /v1/chat are bypassed.",
+    "time_utc": "2026-11-11T22:53:54.405882+00:00"
+  }
+]

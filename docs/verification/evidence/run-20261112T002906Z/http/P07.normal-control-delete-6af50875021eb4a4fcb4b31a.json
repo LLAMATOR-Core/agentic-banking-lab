@@ -1,0 +1,13 @@
+{
+  "time_utc": "2026-11-12T00:29:55.426234+00:00",
+  "method": "DELETE",
+  "url": "http://127.0.0.1:8004/api/v1/episodic/6af50875021eb4a4fcb4b31a",
+  "request": null,
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "deleted": "6af50875021eb4a4fcb4b31a",
+    "memory_type": "episodic"
+  },
+  "elapsed_ms": 334.3
+}

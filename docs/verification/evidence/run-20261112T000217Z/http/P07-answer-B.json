@@ -1,0 +1,31 @@
+{
+  "time_utc": "2026-11-12T00:02:40.549714+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Нужно ли отдельное подтверждение перевода до 100 рублей?",
+    "conversation_id": "verify-answer-P07-3f59b96f35"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "message": "Точный порог, при котором для перевода до 100 ₽ не требуется отдельное подтверждение, я подтвердить не могу — правила зависят от настроек безопасности и канала перевода. Чтобы не давать вам неверную информацию, рекомендую проверить подсказку на экране подтверждения в приложении. Могу подготовить перевод или оплату — подтверждение пройдёт по стандартной процедуре банка.",
+    "conversation_id": "verify-answer-P07-3f59b96f35",
+    "intent": "general",
+    "tool_calls": [
+      "abs.get_customer_info",
+      "llm.route_intent",
+      "llm.compose_response"
+    ],
+    "requires_confirmation": false,
+    "confirmation_id": null,
+    "data": {
+      "memory_context": [],
+      "connections": {
+        "abs_mcp_mode": "secure",
+        "selected_customer_id": null
+      }
+    }
+  },
+  "elapsed_ms": 9247.09
+}

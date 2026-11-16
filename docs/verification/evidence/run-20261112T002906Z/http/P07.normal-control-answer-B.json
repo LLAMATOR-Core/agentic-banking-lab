@@ -1,0 +1,16 @@
+{
+  "time_utc": "2026-11-12T00:29:42.253672+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Какой код у аэропорта Казани?",
+    "conversation_id": "verify-answer-41389914d2e643009e2e7b13d2498b1b"
+  },
+  "authenticated": true,
+  "http_status": 503,
+  "response": {
+    "detail": "ИИ-модель недоступна: не удалось подключиться к провайдеру",
+    "code": "llm_unavailable"
+  },
+  "elapsed_ms": 12733.48
+}

@@ -1,0 +1,25 @@
+sequenceDiagram
+  participant U as Клиент / C01
+  participant B as C02 Banking Agent
+  participant M as C11/C12 Память
+  participant S as C03 Secure MCP
+  participant K as C15 Keycloak
+  participant A as C05 АБС
+  U->>B: JWT + структурированное action
+  B->>B: Проверить тип и параметры
+  B->>M: Сохранить pending, owner, параметры, срок 15 минут
+  M-->>B: confirmation_id
+  B-->>U: Каноническое описание и запрос подтверждения
+  U->>B: JWT + confirm_action_id
+  B->>M: Прочитать действие текущего клиента
+  M-->>B: Запись действия
+  B->>B: Проверить владельца, статус, срок и параметры
+  B->>S: tool call + JWT + idempotency_key
+  S->>K: Token Exchange
+  K-->>S: JWT для abs-api с клиентом
+  S->>A: Банковская операция
+  A->>A: Проверить владельца счёта, баланс, идемпотентность
+  A-->>S: Результат
+  S-->>B: Результат инструмента
+  B->>M: status=executed и результат
+  B-->>U: Итог операции

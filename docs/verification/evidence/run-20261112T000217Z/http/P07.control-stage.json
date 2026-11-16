@@ -1,0 +1,24 @@
+{
+  "time_utc": "2026-11-12T00:03:03.596503+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/lab/shared-memory",
+  "request": {
+    "memory_type": "semantic",
+    "content": "В учебном банке справочный раздел о путешествиях называется HELP_3f59b96f35. Это общее название справочного раздела, доступного всем клиентам."
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "warning": "untrusted-content-is-staged-until-memory-orchestration",
+    "conversation_id": "lab-direct-a681e80f-4459-420f-81bd-636453d3dc68",
+    "working_memory": {
+      "working_memory_id": "6af502370f49920a51064e3d",
+      "candidate_id": "b3afea46-12c7-4472-b0f4-b5ed77daa02b",
+      "migration": {
+        "status": "pending",
+        "job_id": "6af502370f49920a51064e3e"
+      }
+    }
+  },
+  "elapsed_ms": 374.06
+}

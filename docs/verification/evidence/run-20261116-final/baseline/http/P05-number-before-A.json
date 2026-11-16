@@ -1,0 +1,59 @@
+{
+  "time_utc": "2026-11-16T12:40:14.362096+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P05-number-before-A",
+    "method": "tools/call",
+    "params": {
+      "name": "get_customer_accounts",
+      "arguments": {}
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P05-number-before-A",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "[{\"id\": \"account-001\", \"number\": \"RU10000000000000000001\", \"masked_number\": \"•••• 0001\", \"kind\": \"checking\", \"currency\": \"RUB\", \"balance\": \"245307.40\", \"status\": \"active\"}, {\"id\": \"account-002\", \"number\": \"RU10000000000000000002\", \"masked_number\": \"•••• 0002\", \"kind\": \"savings\", \"currency\": \"RUB\", \"balance\": \"780000.00\", \"status\": \"active\"}, {\"id\": \"account-003\", \"number\": \"RU10000000000000000003\", \"masked_number\": \"•••• 0003\", \"kind\": \"checking\", \"currency\": \"USD\", \"balance\": \"1250.00\", \"status\": \"active\"}]"
+        }
+      ],
+      "structuredContent": [
+        {
+          "id": "account-001",
+          "number": "RU10000000000000000001",
+          "masked_number": "•••• 0001",
+          "kind": "checking",
+          "currency": "RUB",
+          "balance": "245307.40",
+          "status": "active"
+        },
+        {
+          "id": "account-002",
+          "number": "RU10000000000000000002",
+          "masked_number": "•••• 0002",
+          "kind": "savings",
+          "currency": "RUB",
+          "balance": "780000.00",
+          "status": "active"
+        },
+        {
+          "id": "account-003",
+          "number": "RU10000000000000000003",
+          "masked_number": "•••• 0003",
+          "kind": "checking",
+          "currency": "USD",
+          "balance": "1250.00",
+          "status": "active"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "elapsed_ms": 413.6
+}

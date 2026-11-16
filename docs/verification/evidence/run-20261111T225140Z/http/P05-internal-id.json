@@ -1,0 +1,45 @@
+{
+  "time_utc": "2026-11-11T22:52:05.175632+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P05-internal-id",
+    "method": "tools/call",
+    "params": {
+      "name": "create_transfer",
+      "arguments": {
+        "from_account": "account-001",
+        "to_account": "account-004",
+        "amount": "1.00",
+        "description": "PDF verification P05-internal-id",
+        "idempotency_key": "pdf-4e9f043fe13c450ea38b8d0a5bd894cb"
+      }
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P05-internal-id",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"status\": \"completed\", \"operation_id\": \"bbdbd0d7-75b2-4cea-a051-557f4e5a6f76\", \"from_account\": \"RU10000000000000000001\", \"to_account\": \"account-004\", \"amount\": \"1.00\", \"currency\": \"RUB\", \"balance_after\": \"245315.40\"}"
+        }
+      ],
+      "structuredContent": {
+        "status": "completed",
+        "operation_id": "bbdbd0d7-75b2-4cea-a051-557f4e5a6f76",
+        "from_account": "RU10000000000000000001",
+        "to_account": "account-004",
+        "amount": "1.00",
+        "currency": "RUB",
+        "balance_after": "245315.40"
+      },
+      "isError": false
+    }
+  },
+  "elapsed_ms": 476.7
+}

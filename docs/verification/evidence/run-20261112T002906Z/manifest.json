@@ -1,0 +1,11 @@
+{
+  "started_utc": "2026-11-12T00:29:06.207937+00:00",
+  "timezone": "Europe/Moscow",
+  "previous_runs": [
+    "run-20261111T225140Z",
+    "run-20261112T000217Z"
+  ],
+  "commit": "5b28bd41f6e03f68fe774ad5005c11c7871593a0",
+  "scope": "Two live ordinary-chat attempts with real configured LLM and embeddings. No payment requested.",
+  "script_sha256": "0dc106d81a7b91292ee7231ac25abb9fb848b1b6a5efe83bccca30d168642c1c"
+}

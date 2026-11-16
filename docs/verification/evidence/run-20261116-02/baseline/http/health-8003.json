@@ -1,0 +1,25 @@
+{
+  "time_utc": "2026-11-16T12:36:03.778738+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8003/health",
+  "request": null,
+  "authenticated": false,
+  "http_status": 200,
+  "response": {
+    "status": "ok",
+    "service": "travel-agent",
+    "flight_provider": "tutu",
+    "observability": {
+      "system_id": "travel",
+      "project_name": "Travel",
+      "project_id": "33333333-3333-4333-8333-333333333333"
+    },
+    "llm": {
+      "required": true,
+      "configured": true,
+      "model": "deepseek-flash",
+      "provider": "api.deepseek.com"
+    }
+  },
+  "elapsed_ms": 281.9
+}

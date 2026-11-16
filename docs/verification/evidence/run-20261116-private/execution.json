@@ -1,0 +1,92 @@
+[
+  {
+    "step": "dependencies",
+    "argv": [
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pip",
+      "freeze"
+    ],
+    "started_utc": "2026-11-16T12:42:34.390227+00:00",
+    "exit_code": 0,
+    "log": "dependencies.log"
+  },
+  {
+    "step": "ruff",
+    "argv": [
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\.venv\\Scripts\\python.exe",
+      "-m",
+      "ruff",
+      "check",
+      "services",
+      "tests",
+      "scripts"
+    ],
+    "started_utc": "2026-11-16T12:42:35.483930+00:00",
+    "exit_code": 0,
+    "log": "ruff.log"
+  },
+  {
+    "step": "containers",
+    "argv": [
+      "docker",
+      "compose",
+      "-p",
+      "abl-stage-verification",
+      "-f",
+      "docker-compose.yml",
+      "-f",
+      "scripts/verification/compose.models.yml",
+      "ps",
+      "--all",
+      "--format",
+      "json"
+    ],
+    "started_utc": "2026-11-16T12:42:35.639911+00:00",
+    "exit_code": 0,
+    "log": "containers.log"
+  },
+  {
+    "step": "images",
+    "argv": [
+      "docker",
+      "compose",
+      "-p",
+      "abl-stage-verification",
+      "-f",
+      "docker-compose.yml",
+      "-f",
+      "scripts/verification/compose.models.yml",
+      "images",
+      "--format",
+      "json"
+    ],
+    "started_utc": "2026-11-16T12:42:38.974197+00:00",
+    "exit_code": 0,
+    "log": "images.log"
+  },
+  {
+    "step": "private",
+    "argv": [
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\.venv\\Scripts\\python.exe",
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\scripts\\verification\\check_normal_memory.py",
+      "--run",
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\docs\\verification\\evidence\\run-20261116-private\\private"
+    ],
+    "started_utc": "2026-11-16T12:42:39.259039+00:00",
+    "exit_code": 0,
+    "log": "private.log"
+  },
+  {
+    "step": "migration-jobs",
+    "argv": [
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\.venv\\Scripts\\python.exe",
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\scripts\\verification\\inspect_memory_jobs.py",
+      "--run",
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\docs\\verification\\evidence\\run-20261116-private\\private"
+    ],
+    "started_utc": "2026-11-16T12:43:06.884752+00:00",
+    "exit_code": 0,
+    "log": "migration-jobs.log"
+  }
+]

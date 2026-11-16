@@ -1,0 +1,16 @@
+{
+  "time_utc": "2026-11-12T00:29:55.763110+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8000/v1/lab/memory-recall",
+  "request": {
+    "query": "Какой код у аэропорта Казани?",
+    "conversation_id": "verify-clean-a3bccf88eab84d498876b52b0b48a0d5"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "user_id": "customer-002",
+    "memories": []
+  },
+  "elapsed_ms": 424.51
+}

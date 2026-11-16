@@ -1,0 +1,13 @@
+{
+  "time_utc": "2026-11-12T00:29:54.989509+00:00",
+  "method": "DELETE",
+  "url": "http://127.0.0.1:8004/api/v1/semantic/banking-agent/*/6af50875021eb4a4fcb4b319",
+  "request": null,
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "deleted": "6af50875021eb4a4fcb4b319",
+    "memory_type": "semantic"
+  },
+  "elapsed_ms": 433.2
+}

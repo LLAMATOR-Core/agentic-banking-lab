@@ -1,0 +1,12 @@
+{
+  "time_utc": "2026-11-11T22:52:12.171983+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8002/api/v1/working/conversations/banking-agent/customer-001",
+  "request": null,
+  "authenticated": true,
+  "http_status": 403,
+  "response": {
+    "detail": "Calling client is not allowed"
+  },
+  "elapsed_ms": 618.04
+}

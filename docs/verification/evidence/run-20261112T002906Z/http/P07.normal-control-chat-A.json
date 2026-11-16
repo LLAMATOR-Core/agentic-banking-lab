@@ -1,0 +1,31 @@
+{
+  "time_utc": "2026-11-12T00:29:16.407505+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Запомни полезный справочный факт для путешествий: аэропорт Казани имеет код KZN. Название моей заметки — MEMCHECK_9e9f05d135d6.",
+    "conversation_id": "verify-ordinary-e875befcd98e4b9195a47f4427128051"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "message": "Иван Сергеевич, сохранять заметки в долговременную память я не могу — такая функция мне недоступна, поэтому запись «MEMCHECK_9e9f05d135d6» не будет сохранена. При этом в рамках текущего диалога я учту факт: аэропорт Казани — код KZN.\n\nМогу помочь с другим: показать ваши счета и операции, подготовить перевод или оплату с подтверждением, рассказать об инвестиционных продуктах или спланировать поездку через партнёра. Что из этого нужно?",
+    "conversation_id": "verify-ordinary-e875befcd98e4b9195a47f4427128051",
+    "intent": "general",
+    "tool_calls": [
+      "abs.get_customer_info",
+      "llm.route_intent",
+      "llm.compose_response"
+    ],
+    "requires_confirmation": false,
+    "confirmation_id": null,
+    "data": {
+      "memory_context": [],
+      "connections": {
+        "abs_mcp_mode": "secure",
+        "selected_customer_id": null
+      }
+    }
+  },
+  "elapsed_ms": 14439.56
+}

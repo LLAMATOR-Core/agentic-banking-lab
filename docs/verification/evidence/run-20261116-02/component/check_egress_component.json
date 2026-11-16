@@ -1,0 +1,74 @@
+{
+  "scope": "Real client serialization captured at dispatch; MCP handshake responses simulated; remote receipt not tested.",
+  "marker": "PRIVATE_DISPATCH_949f3254c2",
+  "dispatch": [
+    {
+      "url": "http://travel-api:8003/a2a/v1/message:send",
+      "json": {
+        "message": {
+          "role": "ROLE_USER",
+          "parts": [
+            {
+              "data": {
+                "request_type": "destination_info",
+                "user_query": "Нужна поездка. Личный маркер PRIVATE_DISPATCH_949f3254c2",
+                "adults": 1,
+                "currency": "RUB",
+                "interests": [],
+                "destination": "Казань",
+                "extra": {
+                  "private_note": "PRIVATE_DISPATCH_949f3254c2"
+                },
+                "missing_fields": [],
+                "user_id": "customer-001"
+              },
+              "mediaType": "application/json"
+            }
+          ],
+          "messageId": "535d23ff-edaf-4e5d-b6ac-d2e5c8cc1923",
+          "contextId": "verify-dispatch-eab3adaae6ab4964a39219a87dee267d"
+        }
+      }
+    },
+    {
+      "url": "http://duckduckgo-mcp:8105/mcp",
+      "json": {
+        "jsonrpc": "2.0",
+        "id": "b4f9d3da-5483-4668-b05b-53bfa7cf276a",
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "agentic-banking",
+            "version": "0.1.0"
+          }
+        }
+      }
+    },
+    {
+      "url": "http://duckduckgo-mcp:8105/mcp",
+      "json": {
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized",
+        "params": {}
+      }
+    },
+    {
+      "url": "http://duckduckgo-mcp:8105/mcp",
+      "json": {
+        "jsonrpc": "2.0",
+        "id": "4bb43347-554a-4f4e-ac48-8fb144a7c83c",
+        "method": "tools/call",
+        "params": {
+          "name": "news_search",
+          "arguments": {
+            "query": "инвестиции рынки Личный маркер PRIVATE_DISPATCH_949f3254c2. Какие новости рынков?",
+            "region": "ru-ru",
+            "max_results": 5
+          }
+        }
+      }
+    }
+  ]
+}

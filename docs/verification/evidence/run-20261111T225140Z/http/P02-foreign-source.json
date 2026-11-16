@@ -1,0 +1,36 @@
+{
+  "time_utc": "2026-11-11T22:51:56.131672+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P02-foreign-source",
+    "method": "tools/call",
+    "params": {
+      "name": "create_transfer",
+      "arguments": {
+        "from_account": "account-004",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "description": "PDF verification P02-foreign-source",
+        "idempotency_key": "pdf-86af688b52c24d0db4400f70367d91e5"
+      }
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P02-foreign-source",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "ABS rejected the operation: Source account not found for this customer"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "elapsed_ms": 354.71
+}

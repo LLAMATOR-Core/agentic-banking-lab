@@ -1,0 +1,12 @@
+E501 Line too long (102 > 100)
+  --> scripts\verification\reproduce.py:95:101
+   |
+93 |             ).strip(),
+94 |             "working_tree": subprocess.check_output(
+95 |                 ["git", "-c", "safe.directory=" + ROOT.as_posix(), "status", "--porcelain"], text=True
+   |                                                                                                     ^^
+96 |             ),
+97 |             "python": sys.version,
+   |
+
+Found 1 error.

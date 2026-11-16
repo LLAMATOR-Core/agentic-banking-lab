@@ -1,0 +1,14 @@
+{
+  "time_utc": "2026-11-16T12:36:31.231481+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8004/api/v1/orchestrator/collect",
+  "request": {
+    "limit": 1
+  },
+  "authenticated": true,
+  "http_status": 403,
+  "response": {
+    "detail": "Calling client is not allowed"
+  },
+  "elapsed_ms": 427.62
+}

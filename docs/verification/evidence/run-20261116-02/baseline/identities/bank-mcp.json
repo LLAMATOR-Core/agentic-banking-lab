@@ -1,0 +1,12 @@
+{
+  "sub": "805d0891-a589-4006-853f-376d0eaf4417",
+  "azp": "bank-mcp",
+  "aud": [
+    "abs-api",
+    "account"
+  ],
+  "customer_id": null,
+  "exp": 1794832888,
+  "iat": 1794832588,
+  "iss": "http://localhost:8080/realms/agentic-banking"
+}

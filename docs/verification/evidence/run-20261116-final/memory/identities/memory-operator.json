@@ -1,0 +1,12 @@
+{
+  "sub": "349aa88a-1bc9-403b-a063-97f62ab17ef8",
+  "azp": "memory-operator",
+  "aud": [
+    "memory-orchestrator",
+    "account"
+  ],
+  "customer_id": null,
+  "exp": 1794833132,
+  "iat": 1794832832,
+  "iss": "http://localhost:8080/realms/agentic-banking"
+}

@@ -1,0 +1,50 @@
+{
+  "time_utc": "2026-11-16T12:40:08.443593+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P02-after-B",
+    "method": "tools/call",
+    "params": {
+      "name": "get_customer_accounts",
+      "arguments": {}
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P02-after-B",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "[{\"id\": \"account-004\", \"number\": \"RU20000000000000000001\", \"masked_number\": \"•••• 0001\", \"kind\": \"checking\", \"currency\": \"RUB\", \"balance\": \"113458.75\", \"status\": \"active\"}, {\"id\": \"account-005\", \"number\": \"RU20000000000000000002\", \"masked_number\": \"•••• 0002\", \"kind\": \"savings\", \"currency\": \"RUB\", \"balance\": \"350000.00\", \"status\": \"active\"}]"
+        }
+      ],
+      "structuredContent": [
+        {
+          "id": "account-004",
+          "number": "RU20000000000000000001",
+          "masked_number": "•••• 0001",
+          "kind": "checking",
+          "currency": "RUB",
+          "balance": "113458.75",
+          "status": "active"
+        },
+        {
+          "id": "account-005",
+          "number": "RU20000000000000000002",
+          "masked_number": "•••• 0002",
+          "kind": "savings",
+          "currency": "RUB",
+          "balance": "350000.00",
+          "status": "active"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "elapsed_ms": 344.79
+}

@@ -178,3 +178,11 @@ Travel Agent — локальная имитация. Поиск отелей н
 - [Система памяти: архитектура и маршруты](docs/MEMORY_SYSTEM.md)
 - [Память и контекст LLM](docs/MEMORY.md)
 - [MCP и A2A](docs/INTEROPERABILITY.md)
+
+- [Практическая работа № 1](docs/reports/СпиридоновМихаилАндреевич_1.pdf)
+- [Практическая работа № 2](docs/reports/СпиридоновМихаилАндреевич_2.pdf)
+- [Результаты проверки от 12 ноября 2026 года](docs/verification/RESULTS-2026-11-12.md)
+- [Предложение: одноразовое разрешение на операцию](docs/proposals/operation-approval.md)
+
+- [Как повторить проверки и проверить доказательства](docs/verification/HOW_TO_REPEAT.md)
+- [Новые результаты проверки от 16 ноября 2026 года](docs/verification/RESULTS-2026-11-16.md)

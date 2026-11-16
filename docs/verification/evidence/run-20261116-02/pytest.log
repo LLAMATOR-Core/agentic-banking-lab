@@ -1,0 +1,440 @@
+
+=================================== ERRORS ====================================
+________________ ERROR collecting tests/test_action_policy.py _________________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_action_policy.py:5: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+________________ ERROR collecting tests/test_agent_context.py _________________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_agent_context.py:14: in <module>
+    from services.banking_agent.graph import BankingGraph
+services\banking_agent\graph.py:11: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+_____________ ERROR collecting tests/test_conversation_memory.py ______________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_conversation_memory.py:7: in <module>
+    from services.banking_agent.graph import BankingGraph
+services\banking_agent\graph.py:11: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+___________________ ERROR collecting tests/test_intents.py ____________________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_intents.py:7: in <module>
+    from services.banking_agent.graph import BankingGraph
+services\banking_agent\graph.py:11: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+_______________ ERROR collecting tests/test_operations_skill.py _______________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_operations_skill.py:8: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+_________________ ERROR collecting tests/test_stand_modes.py __________________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_stand_modes.py:7: in <module>
+    from services.banking_agent.graph import BankingGraph
+services\banking_agent\graph.py:11: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+_____________ ERROR collecting tests/test_travel_clarification.py _____________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_travel_clarification.py:9: in <module>
+    from services.banking_agent.graph import BankingGraph
+services\banking_agent\graph.py:11: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+_______________ ERROR collecting tests/test_travel_contract.py ________________
+C:\Python312\Lib\zoneinfo\_common.py:12: in load_tzdata
+    return resources.files(package_name).joinpath(resource_name).open("rb")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:46: in wrapper
+    return func(anchor)
+           ^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:56: in files
+    return from_package(resolve(anchor))
+                        ^^^^^^^^^^^^^^^
+C:\Python312\Lib\functools.py:907: in wrapper
+    return dispatch(args[0].__class__)(*args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\resources\_common.py:82: in _
+    return importlib.import_module(cand)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1310: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1324: in _find_and_load_unlocked
+    ???
+E   ModuleNotFoundError: No module named 'tzdata'
+
+During handling of the above exception, another exception occurred:
+tests\test_travel_contract.py:14: in <module>
+    from services.banking_agent.skills import BankingSkills
+services\banking_agent\skills.py:18: in <module>
+    BANK_TIMEZONE = ZoneInfo(os.getenv("BANK_TIMEZONE", "Europe/Moscow"))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\zoneinfo\_common.py:24: in load_tzdata
+    raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+E   zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Europe/Moscow'
+- generated xml file: C:\Users\spiri\alfa_stage\agentic-banking-lab\docs\verification\evidence\run-20261116-02\pytest.xml -
+=========================== short test summary info ===========================
+ERROR tests/test_action_policy.py - zoneinfo._common.ZoneInfoNotFoundError: '...
+ERROR tests/test_agent_context.py - zoneinfo._common.ZoneInfoNotFoundError: '...
+ERROR tests/test_conversation_memory.py - zoneinfo._common.ZoneInfoNotFoundEr...
+ERROR tests/test_intents.py - zoneinfo._common.ZoneInfoNotFoundError: 'No tim...
+ERROR tests/test_operations_skill.py - zoneinfo._common.ZoneInfoNotFoundError...
+ERROR tests/test_stand_modes.py - zoneinfo._common.ZoneInfoNotFoundError: 'No...
+ERROR tests/test_travel_clarification.py - zoneinfo._common.ZoneInfoNotFoundE...
+ERROR tests/test_travel_contract.py - zoneinfo._common.ZoneInfoNotFoundError:...
+!!!!!!!!!!!!!!!!!!! Interrupted: 8 errors during collection !!!!!!!!!!!!!!!!!!!
+8 errors in 9.19s

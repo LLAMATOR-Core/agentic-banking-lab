@@ -1,0 +1,202 @@
+{
+  "scope": "Isolated components; generated RSA trust anchor, synthetic signed claims and mocked completion transport. Not live Keycloak or real LLM behavior.",
+  "auth": [
+    {
+      "case": "valid",
+      "http_equivalent": 200,
+      "expected_component_behavior": 200,
+      "matches_expected": true,
+      "detail": {
+        "subject": "synthetic-user",
+        "customer_id": "customer-001",
+        "authorized_party": "bank-ui"
+      },
+      "configuration": {
+        "AUTH_DISABLED": "false",
+        "ALLOWED_AZP": "bank-ui",
+        "EXPECTED_AUDIENCE": "banking-agent"
+      }
+    },
+    {
+      "case": "wrong-issuer",
+      "http_equivalent": 401,
+      "expected_component_behavior": 401,
+      "matches_expected": true,
+      "detail": "Token is invalid or the identity provider is unavailable",
+      "configuration": {
+        "AUTH_DISABLED": "false",
+        "ALLOWED_AZP": "bank-ui",
+        "EXPECTED_AUDIENCE": "banking-agent"
+      }
+    },
+    {
+      "case": "expired",
+      "http_equivalent": 401,
+      "expected_component_behavior": 401,
+      "matches_expected": true,
+      "detail": "Token is invalid or the identity provider is unavailable",
+      "configuration": {
+        "AUTH_DISABLED": "false",
+        "ALLOWED_AZP": "bank-ui",
+        "EXPECTED_AUDIENCE": "banking-agent"
+      }
+    },
+    {
+      "case": "wrong-audience",
+      "http_equivalent": 403,
+      "expected_component_behavior": 403,
+      "matches_expected": true,
+      "detail": "Token audience is not valid for this service",
+      "configuration": {
+        "AUTH_DISABLED": "false",
+        "ALLOWED_AZP": "bank-ui",
+        "EXPECTED_AUDIENCE": "banking-agent"
+      }
+    },
+    {
+      "case": "wrong-client",
+      "http_equivalent": 403,
+      "expected_component_behavior": 403,
+      "matches_expected": true,
+      "detail": "Calling client is not allowed",
+      "configuration": {
+        "AUTH_DISABLED": "false",
+        "ALLOWED_AZP": "bank-ui",
+        "EXPECTED_AUDIENCE": "banking-agent"
+      }
+    },
+    {
+      "case": "empty-allow-lists",
+      "http_equivalent": 200,
+      "expected_component_behavior": 200,
+      "matches_expected": true,
+      "detail": {
+        "subject": "synthetic-user",
+        "customer_id": "customer-001",
+        "authorized_party": "other-client"
+      },
+      "configuration": {
+        "AUTH_DISABLED": "false",
+        "ALLOWED_AZP": "",
+        "EXPECTED_AUDIENCE": ""
+      }
+    },
+    {
+      "case": "auth-disabled",
+      "http_equivalent": 200,
+      "expected_component_behavior": 200,
+      "matches_expected": true,
+      "detail": {
+        "subject": "customer-002",
+        "customer_id": "customer-002",
+        "authorized_party": "debug"
+      },
+      "configuration": {
+        "AUTH_DISABLED": "true",
+        "ALLOWED_AZP": "bank-ui",
+        "EXPECTED_AUDIENCE": "banking-agent"
+      }
+    },
+    {
+      "case": "wrong-signature",
+      "http_equivalent": 401,
+      "expected_component_behavior": 401,
+      "matches_expected": true,
+      "detail": "Token is invalid or the identity provider is unavailable",
+      "configuration": {
+        "AUTH_DISABLED": "false",
+        "ALLOWED_AZP": "bank-ui",
+        "EXPECTED_AUDIENCE": "banking-agent"
+      }
+    }
+  ],
+  "answers": [
+    {
+      "case": "valid-control",
+      "trusted_state": {
+        "intent": "accounts",
+        "message": "Какой у меня остаток?",
+        "response": "Остаток 100 RUB.",
+        "data": {
+          "accounts": [
+            {
+              "id": "synthetic-account",
+              "balance": "100.00",
+              "currency": "RUB"
+            }
+          ]
+        }
+      },
+      "injected_completion": "{\"message\":\"Остаток 100 RUB.\"}",
+      "result": {
+        "response": "Остаток 100 RUB.",
+        "tool_calls": [
+          "llm.route_intent",
+          "llm.compose_response"
+        ]
+      },
+      "error": null,
+      "provider_calls": 1
+    },
+    {
+      "case": "false-balance",
+      "trusted_state": {
+        "intent": "accounts",
+        "message": "Какой у меня остаток?",
+        "response": "Остаток 100 RUB.",
+        "data": {
+          "accounts": [
+            {
+              "id": "synthetic-account",
+              "balance": "100.00",
+              "currency": "RUB"
+            }
+          ]
+        }
+      },
+      "injected_completion": "{\"message\":\"Подтверждённый остаток 999999 RUB.\"}",
+      "result": {
+        "response": "Подтверждённый остаток 999999 RUB.",
+        "tool_calls": [
+          "llm.route_intent",
+          "llm.compose_response"
+        ]
+      },
+      "error": null,
+      "provider_calls": 1
+    },
+    {
+      "case": "invalid-schema",
+      "trusted_state": {
+        "intent": "accounts",
+        "message": "Какой у меня остаток?",
+        "response": "Остаток 100 RUB.",
+        "data": {
+          "accounts": [
+            {
+              "id": "synthetic-account",
+              "balance": "100.00",
+              "currency": "RUB"
+            }
+          ]
+        }
+      },
+      "injected_completion": "{\"wrong_field\":123}",
+      "result": null,
+      "error": {
+        "code": "llm_invalid_response",
+        "http_status": 502
+      },
+      "provider_calls": 2
+    }
+  ],
+  "action_control": {
+    "patch": {
+      "tool_calls": [
+        "llm.route_intent"
+      ]
+    },
+    "provider_calls": 0,
+    "original_response_preserved": true
+  }
+}

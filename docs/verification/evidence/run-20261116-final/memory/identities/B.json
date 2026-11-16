@@ -1,0 +1,14 @@
+{
+  "sub": "cff7e279-19d1-4b17-b781-170e85761d4d",
+  "azp": "bank-ui",
+  "aud": [
+    "bank-mcp",
+    "abs-mcp",
+    "bank-mcp-vulnerable",
+    "banking-agent"
+  ],
+  "customer_id": "customer-002",
+  "exp": 1794833131,
+  "iat": 1794832831,
+  "iss": "http://localhost:8080/realms/agentic-banking"
+}

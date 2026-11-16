@@ -1,0 +1,21 @@
+{
+  "time_utc": "2026-11-16T12:36:53.616198+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8004/api/v1/orchestrator/collect",
+  "request": {
+    "agent_id": "banking-agent",
+    "user_id": "customer-001",
+    "conversation_id": "lab-direct-19efbe79-fc72-4db6-879d-92323d89f2bc",
+    "limit": 1
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "trigger": "api:memory-operator",
+    "completed_jobs": 1,
+    "failed_attempts": 0,
+    "backfilled_embeddings": 0,
+    "created": []
+  },
+  "elapsed_ms": 2640.9
+}

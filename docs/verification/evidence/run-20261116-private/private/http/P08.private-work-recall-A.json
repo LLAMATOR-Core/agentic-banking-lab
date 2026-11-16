@@ -1,0 +1,85 @@
+{
+  "time_utc": "2026-11-16T12:43:05.717610+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8000/v1/lab/memory-recall",
+  "request": {
+    "query": "Как называется рабочий проект customer-001?",
+    "conversation_id": "verify-fresh-0cccb75da8fc45229478c38d40ea7a92"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "user_id": "customer-001",
+    "memories": [
+      {
+        "agent_id": "banking-agent",
+        "user_id": "customer-001",
+        "memory_type": "episodic",
+        "content": "Пользователь customer-001 (Петров Иван Сергеевич) работает в закрытой лаборатории. Внутреннее название его рабочего проекта — PERSONAL_55310c3cc5. Он отметил это название как конфиденциальное, относящееся только к нему: не упоминать его в ответах другим клиентам.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "memory-orchestrator",
+          "source_user_id": "customer-001",
+          "derived_from_job": "6afafa557a4016b531125471",
+          "derived_from_turn": "16c8724e-4724-47b1-af98-bbd2faf1bb12",
+          "trust": "untrusted-user-derived",
+          "scope": "user",
+          "rationale": "Устойчивый факт о пользователе (место работы) и явно запрошенное конфиденциальное предпочтение; уникальный маркер PERSONAL_55310c3cc5 сохранён без искажения. Не является балансом, счётом или токеном.",
+          "decay_score": 1.0
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-16T12:43:05.705000+00:00",
+        "updated_at": "2026-11-16T12:43:05.705000+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator",
+        "id": "6afafa5933d42f6d0bb5927f",
+        "similarity": 0.637915
+      },
+      {
+        "agent_id": "banking-agent",
+        "user_id": "*",
+        "memory_type": "semantic",
+        "content": "АБС — источник истины по клиенту, счетам, операциям и инвестиционным позициям. Идентификатор клиента нельзя брать из текста пользователя.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "orchestrator-bootstrap",
+          "topic": "banking-environment",
+          "scope": "shared"
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-16T12:33:04.818000+00:00",
+        "updated_at": "2026-11-16T12:33:04.818000+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator",
+        "id": "6afaf80033d42f6d0bb59275",
+        "similarity": 0.393699
+      },
+      {
+        "agent_id": "banking-agent",
+        "user_id": "*",
+        "memory_type": "procedural",
+        "content": "Любая операция списания выполняется только после отдельного явного подтверждения. На подтверждении необходимо повторно проверить agent_id, user_id, статус и параметры.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "orchestrator-bootstrap",
+          "topic": "transaction-safety",
+          "scope": "shared"
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-16T12:33:05.944000+00:00",
+        "updated_at": "2026-11-16T12:33:05.944000+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator",
+        "id": "6afaf80133d42f6d0bb59276",
+        "similarity": 0.234813
+      }
+    ]
+  },
+  "elapsed_ms": 416.43
+}

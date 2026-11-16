@@ -1,0 +1,12 @@
+{
+  "time_utc": "2026-11-16T12:36:29.857729+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8000/v1/dashboard",
+  "request": null,
+  "authenticated": true,
+  "http_status": 401,
+  "response": {
+    "detail": "Token is invalid or the identity provider is unavailable"
+  },
+  "elapsed_ms": 479.75
+}

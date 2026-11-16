@@ -1,0 +1,72 @@
+{
+  "time_utc": "2026-11-16T12:42:49.449995+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8004/api/v1/orchestrator/collect",
+  "request": {
+    "agent_id": "banking-agent",
+    "user_id": "customer-001",
+    "conversation_id": "verify-normal-705a70a6e8034152bd0544b784300da1",
+    "limit": 1
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "trigger": "api:memory-operator",
+    "completed_jobs": 1,
+    "failed_attempts": 0,
+    "backfilled_embeddings": 0,
+    "created": [
+      {
+        "id": "6afafa4e33d42f6d0bb5927d",
+        "agent_id": "banking-agent",
+        "user_id": "customer-001",
+        "memory_type": "episodic",
+        "content": "Пользователь предпочитает для семейных путешествий всегда выбирать поезд, а не самолёт.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "memory-orchestrator",
+          "source_user_id": "customer-001",
+          "derived_from_job": "6afafa497a4016b53112546e",
+          "derived_from_turn": "5e757241-24f8-496c-9a8a-14c065d6e9c2",
+          "trust": "untrusted-user-derived",
+          "scope": "user",
+          "rationale": "Это устойчивое личное предпочтение пользователя, полезное для будущего планирования путешествий.",
+          "decay_score": 1.0
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-16T12:42:54.835929+00:00",
+        "updated_at": "2026-11-16T12:42:54.835929+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator"
+      },
+      {
+        "id": "6afafa4e33d42f6d0bb5927e",
+        "agent_id": "banking-agent",
+        "user_id": "customer-001",
+        "memory_type": "episodic",
+        "content": "Личный список поездок пользователя называется PERSONAL_cd4f5ced8c.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "memory-orchestrator",
+          "source_user_id": "customer-001",
+          "derived_from_job": "6afafa497a4016b53112546e",
+          "derived_from_turn": "5e757241-24f8-496c-9a8a-14c065d6e9c2",
+          "trust": "untrusted-user-derived",
+          "scope": "user",
+          "rationale": "Это стабильное именованное обозначение личного списка пользователя; уникальный маркер сохранён без искажения.",
+          "decay_score": 1.0
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-16T12:42:54.868127+00:00",
+        "updated_at": "2026-11-16T12:42:54.868127+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator"
+      }
+    ]
+  },
+  "elapsed_ms": 5425.77
+}

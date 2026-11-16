@@ -1,0 +1,84 @@
+{
+  "time_utc": "2026-11-12T00:32:00.154605+00:00",
+  "missing_referenced_evidence": [],
+  "current_run_balance_delta": {
+    "account-001": "0.00",
+    "account-002": "0.00",
+    "account-003": "0.00",
+    "account-004": "0.00",
+    "account-005": "0.00"
+  },
+  "baseline_run_balance_delta": {
+    "account-001": "-7.00",
+    "account-002": "0.00",
+    "account-003": "0.00",
+    "account-004": "4.00",
+    "account-005": "0.00"
+  },
+  "since_first_recorded_snapshot_delta": {
+    "account-001": "-10.00",
+    "account-002": "0.00",
+    "account-003": "0.00",
+    "account-004": "7.00",
+    "account-005": "0.00"
+  },
+  "created_long_term_records": [
+    {
+      "id": "6af50875021eb4a4fcb4b319",
+      "memory_type": "semantic",
+      "owner": "*",
+      "delete_http_status": 200
+    },
+    {
+      "id": "6af50875021eb4a4fcb4b31a",
+      "memory_type": "episodic",
+      "owner": "customer-001",
+      "delete_http_status": 200
+    },
+    {
+      "id": "6af508b5021eb4a4fcb4b31b",
+      "memory_type": "procedural",
+      "owner": "*",
+      "delete_http_status": 200
+    },
+    {
+      "id": "6af508b5021eb4a4fcb4b31c",
+      "memory_type": "episodic",
+      "owner": "customer-001",
+      "delete_http_status": 200
+    }
+  ],
+  "all_current_deletes_http_200": true,
+  "jwt_cases_match_expected_component_behavior": true,
+  "false_balance_accepted": "Подтверждённый остаток 999999 RUB.",
+  "action_response_skips_llm": {
+    "patch": {
+      "tool_calls": [
+        "llm.route_intent"
+      ]
+    },
+    "provider_calls": 0,
+    "original_response_preserved": true
+  },
+  "mcp_wrong_type_accepted": true,
+  "mcp_foreign_response_id_accepted": true,
+  "scripts_sha256": {
+    "check_action_component.py": "e2d6d6f8f9f4e8e39e9e87ea69db1e4ce0f04d7ce9d284da7d25905675851459",
+    "check_boundaries_component.py": "e4d7c123fdb4d99369cc9326c1a9030025439cf86d319831c39de731375db744",
+    "check_contract_component.py": "a623c367abf02219ff73be6e0ef723bed9949f291bd6c5d9f6fa62ed15891626",
+    "check_egress_component.py": "c688613c28852237ff4735c7122247c7bbb630dbac0ebbe593fe2672e0ae7a64",
+    "check_normal_memory.py": "549b9206a7adde7c7e91666ca22d688e9457d681d7cbaea578ad51fe41e2bafe",
+    "check_remaining_component.py": "45d0091116f430b207e2c79849da04f90dc7d7c899ac72397b9a5e66f96385af",
+    "check_shared_dialog.py": "5882a9c020aa26d31744b5c05bdc9bbd1a53820f68a4a7eace2491f11f9fc1a6",
+    "continue_experiments.py": "61d7761738aa427f036bf6787517f5b5f72ad8ea8de785413ce76c247af02a7c",
+    "inspect_memory_jobs.py": "04249eb096a4ce0ebf2b56eb40b2e43891cad01f3d2764ed39720698ded4126d",
+    "run_component.py": "a27ded3d2f5ebab4fbc7bf5267855fd3f2d6a6baa7d78be4ca12d96696182b3c",
+    "summarize_evidence.py": "329c18f51ece1bdc0326889ea8e2767b9fdb546b2da6952bb7c38680e6da6ce6",
+    "verify_runtime.py": "9408bc506fe6cd531a9820a91814f4e14ac9e0b2145ef22a0c4ca0fa2fe7d971"
+  },
+  "notes": [
+    "A matching expected component behavior is not necessarily a security PASS.",
+    "Balance restoration in P11 applies only to that experiment, not all earlier runs.",
+    "The provider adapter records only requests routed through it; banking-agent uses its own configured endpoint."
+  ]
+}

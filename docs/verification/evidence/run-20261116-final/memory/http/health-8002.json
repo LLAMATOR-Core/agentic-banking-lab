@@ -1,0 +1,25 @@
+{
+  "time_utc": "2026-11-16T12:40:32.716422+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8002/health",
+  "request": null,
+  "authenticated": false,
+  "http_status": 200,
+  "response": {
+    "status": "ok",
+    "service": "memory-service",
+    "mode": "working-write-and-read-only-long-term",
+    "embeddings": {
+      "required": true,
+      "configured": true,
+      "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "provider": "local-models:8100"
+    },
+    "observability": {
+      "system_id": "memory",
+      "project_name": "Persistent Memory",
+      "project_id": "44444444-4444-4444-8444-444444444444"
+    }
+  },
+  "elapsed_ms": 329.57
+}

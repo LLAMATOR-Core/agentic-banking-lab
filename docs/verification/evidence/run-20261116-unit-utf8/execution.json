@@ -1,0 +1,42 @@
+[
+  {
+    "step": "dependencies",
+    "argv": [
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pip",
+      "freeze"
+    ],
+    "started_utc": "2026-11-16T12:38:18.906465+00:00",
+    "exit_code": 0,
+    "log": "dependencies.log"
+  },
+  {
+    "step": "pytest",
+    "argv": [
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "--junitxml=C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\docs\\verification\\evidence\\run-20261116-unit-utf8\\pytest.xml"
+    ],
+    "started_utc": "2026-11-16T12:38:20.117785+00:00",
+    "exit_code": 1,
+    "log": "pytest.log"
+  },
+  {
+    "step": "ruff",
+    "argv": [
+      "C:\\Users\\spiri\\alfa_stage\\agentic-banking-lab\\.venv\\Scripts\\python.exe",
+      "-m",
+      "ruff",
+      "check",
+      "services",
+      "tests",
+      "scripts"
+    ],
+    "started_utc": "2026-11-16T12:38:49.697051+00:00",
+    "exit_code": 0,
+    "log": "ruff.log"
+  }
+]

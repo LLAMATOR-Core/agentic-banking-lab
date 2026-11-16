@@ -1,0 +1,5 @@
+P08.preference: PASS — Ordinary chat promotion: created 2; marker recalled by A=True, B=False. One model attempt.
+P08.preference.cleanup.6afafa4e33d42f6d0bb5927d: PASS — Exact created record removed; original working conversation retained.
+P08.preference.cleanup.6afafa4e33d42f6d0bb5927e: PASS — Exact created record removed; original working conversation retained.
+P08.private-work: PASS — Ordinary chat promotion: created 1; marker recalled by A=True, B=False. One model attempt.
+P08.private-work.cleanup.6afafa5933d42f6d0bb5927f: PASS — Exact created record removed; original working conversation retained.

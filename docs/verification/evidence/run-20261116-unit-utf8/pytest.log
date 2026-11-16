@@ -1,0 +1,330 @@
+........EEEEEEEEEE............................EE........................ [ 59%]
+..................................................                       [100%]
+=================================== ERRORS ====================================
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-tutu-secure] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-tutu-secure]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-tutu-vulnerable] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-tutu-vulnerable]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-mock-secure] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-mock-secure]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-mock-vulnerable] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-mock-vulnerable]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-tutu-secure] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-tutu-secure]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-tutu-vulnerable] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-tutu-vulnerable]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-mock-secure] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-mock-secure]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-mock-vulnerable] _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-mock-vulnerable]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+__ ERROR at setup of test_env_file_passes_memory_interval_to_orchestrator[0] __
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_env_file_passes_memory_interval_to_orchestrator[0]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_env_file_passes_memory_interval_to_orchestrator[10] __
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_env_file_passes_memory_interval_to_orchestrator[10]>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_provider_note_can_be_changed_without_restarting_mock _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_provider_note_can_be_changed_without_restarting_mock>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+_ ERROR at setup of test_lab_ingest_stages_mcp_note_without_turning_it_into_trusted_memory _
+
+fixturedef = <FixtureDef argname='tmp_path' scope='function' baseid=''>
+request = <SubRequest 'tmp_path' for <Function test_lab_ingest_stages_mcp_note_without_turning_it_into_trusted_memory>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        if (
+            fixturedef.argname == "event_loop_policy"
+            and fixturedef.func.__module__ != __name__
+        ):
+            warnings.warn(
+                PytestDeprecationWarning(_EVENT_LOOP_POLICY_FIXTURE_DEPRECATION_WARNING),
+            )
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+                return (yield)
+            if not _is_coroutine_or_asyncgen(fixturedef.func):
+>               return (yield)
+                        ^^^^^
+E               PermissionError: [WinError 5] Отказано в доступе: 'C:\\Users\\spiri\\AppData\\Local\\Temp\\pytest-of-spiri'
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:936: PermissionError
+- generated xml file: C:\Users\spiri\alfa_stage\agentic-banking-lab\docs\verification\evidence\run-20261116-unit-utf8\pytest.xml -
+=========================== short test summary info ===========================
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-tutu-secure]
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-tutu-vulnerable]
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-mock-secure]
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[clean.txt-mock-vulnerable]
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-tutu-secure]
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-tutu-vulnerable]
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-mock-secure]
+ERROR tests/test_compose_modes.py::test_one_env_file_configures_all_modes_without_extra_launch_options[provider-note.txt-mock-vulnerable]
+ERROR tests/test_compose_modes.py::test_env_file_passes_memory_interval_to_orchestrator[0]
+ERROR tests/test_compose_modes.py::test_env_file_passes_memory_interval_to_orchestrator[10]
+ERROR tests/test_flights_mcp.py::test_provider_note_can_be_changed_without_restarting_mock
+ERROR tests/test_flights_mcp.py::test_lab_ingest_stages_mcp_note_without_turning_it_into_trusted_memory
+110 passed, 12 errors in 26.21s

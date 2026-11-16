@@ -1,0 +1,10 @@
+{
+  "audit.json": "d896cc189e088cb3aebccdd4d2c6b19f011c041631def44c4d1386cb4945684b",
+  "dependencies.log": "8342691d2b513c6c8d51e2afa185e96cab9fb041e079f2dbef78b1f56cdd8630",
+  "execution.json": "3ab5f119a0a0ad4e8b0ffd168b930ae38bd44d8cd3e50c2e364394fd8cba7805",
+  "HOW_TO_REPEAT.md": "8ae8a85e01ac05b24ee60e558d1cc3d696c84dc69006211047ada7d643dbbbf8",
+  "pytest.log": "0d918f7cbc43cd31ddea349d8d1384486a646f02cb7e73b5f8cd4a6de30f4153",
+  "pytest.xml": "cba6d9c44eb454ed87cc1d5d76e1b01f426c71806e38a3e1cf33b33d7e0dcdf7",
+  "ruff.log": "a4443afdcfb6d7363adb285762515ccf7cf50473b1a05c20c1a50f6bed4d26b0",
+  "source-manifest.json": "92051ae5642b01b57263c7d568ab6c46396999726cbbca5dcf83cc1632437b25"
+}

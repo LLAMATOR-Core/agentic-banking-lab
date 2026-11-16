@@ -1,0 +1,45 @@
+{
+  "time_utc": "2026-11-16T12:40:18.873559+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P05-unknown",
+    "method": "tools/call",
+    "params": {
+      "name": "create_transfer",
+      "arguments": {
+        "from_account": "account-001",
+        "to_account": "pdf-no-such-account",
+        "amount": "1.00",
+        "description": "PDF verification P05-unknown",
+        "idempotency_key": "pdf-914305ec41a84dbe8d2403153cd0539d"
+      }
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P05-unknown",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"status\": \"completed\", \"operation_id\": \"9e8d2a04-bdd5-47c9-a6c7-100433eb871c\", \"from_account\": \"RU10000000000000000001\", \"to_account\": \"pdf-no-such-account\", \"amount\": \"1.00\", \"currency\": \"RUB\", \"balance_after\": \"245304.40\"}"
+        }
+      ],
+      "structuredContent": {
+        "status": "completed",
+        "operation_id": "9e8d2a04-bdd5-47c9-a6c7-100433eb871c",
+        "from_account": "RU10000000000000000001",
+        "to_account": "pdf-no-such-account",
+        "amount": "1.00",
+        "currency": "RUB",
+        "balance_after": "245304.40"
+      },
+      "isError": false
+    }
+  },
+  "elapsed_ms": 481.75
+}

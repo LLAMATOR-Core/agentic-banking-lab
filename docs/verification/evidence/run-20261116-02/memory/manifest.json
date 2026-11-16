@@ -1,0 +1,10 @@
+{
+  "started_utc": "2026-11-16T12:36:43.786201+00:00",
+  "commit": "5b28bd41f6e03f68fe774ad5005c11c7871593a0",
+  "scope": "Live HTTP, real local embeddings and configured upstream LLM; one attempt per case.",
+  "cleanup": "Only records created by this run, via exact record IDs. Working history retained as evidence.",
+  "scripts": {
+    "continue_experiments.py": "edcac96fe7e704b56127979afe67bdf1f5737d5bc84b1ffc3a78f6b187dde99d",
+    "verify_runtime.py": "4d32dd9864da0dc16f2a13abc097cd48b09cd37c17768061afdd12169840562b"
+  }
+}

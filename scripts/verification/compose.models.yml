@@ -1,0 +1,49 @@
+services:
+  local-models:
+    build:
+      context: ./scripts/verification/local-models
+    environment:
+      UPSTREAM_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - local-embedding-model:/models
+      - ./scripts/verification/runtime/provider:/evidence
+    networks: [memory]
+    ports: ["127.0.0.1:18100:8100"]
+    mem_limit: 900m
+    cpus: 2
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 90
+      start_period: 300s
+  memory-service:
+    environment:
+      OPENAI_BASE_URL: http://local-models:8100/v1
+      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  memory-orchestrator:
+    environment:
+      OPENAI_BASE_URL: http://local-models:8100/v1
+      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      MEMORY_ORCHESTRATION_INTERVAL_SECONDS: 0
+volumes:
+  local-embedding-model:
+networks:
+  banking:
+    ipam:
+      config: [{subnet: "10.241.0.0/24"}]
+  travel:
+    ipam:
+      config: [{subnet: "10.241.1.0/24"}]
+  memory:
+    ipam:
+      config: [{subnet: "10.241.2.0/24"}]
+  bank-storage:
+    ipam:
+      config: [{subnet: "10.241.3.0/24"}]
+  memory-storage:
+    ipam:
+      config: [{subnet: "10.241.4.0/24"}]
+  platform-storage:
+    ipam:
+      config: [{subnet: "10.241.5.0/24"}]

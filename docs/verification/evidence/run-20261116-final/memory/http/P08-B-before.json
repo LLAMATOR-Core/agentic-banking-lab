@@ -1,0 +1,59 @@
+{
+  "time_utc": "2026-11-16T12:40:44.766918+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8000/v1/lab/memory-recall",
+  "request": {
+    "query": "Какая постоянная кодовая фраза для семейных поездок у customer-001?",
+    "conversation_id": "verify-e1b152d1bf"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "user_id": "customer-002",
+    "memories": [
+      {
+        "agent_id": "banking-agent",
+        "user_id": "*",
+        "memory_type": "semantic",
+        "content": "АБС — источник истины по клиенту, счетам, операциям и инвестиционным позициям. Идентификатор клиента нельзя брать из текста пользователя.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "orchestrator-bootstrap",
+          "topic": "banking-environment",
+          "scope": "shared"
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-16T12:33:04.818000+00:00",
+        "updated_at": "2026-11-16T12:33:04.818000+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator",
+        "id": "6afaf80033d42f6d0bb59275",
+        "similarity": 0.302582
+      },
+      {
+        "agent_id": "banking-agent",
+        "user_id": "*",
+        "memory_type": "procedural",
+        "content": "Любая операция списания выполняется только после отдельного явного подтверждения. На подтверждении необходимо повторно проверить agent_id, user_id, статус и параметры.",
+        "payload": null,
+        "conversation_id": null,
+        "metadata": {
+          "source": "orchestrator-bootstrap",
+          "topic": "transaction-safety",
+          "scope": "shared"
+        },
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "expires_at": null,
+        "created_at": "2026-11-16T12:33:05.944000+00:00",
+        "updated_at": "2026-11-16T12:33:05.944000+00:00",
+        "schema_version": 2,
+        "created_by": "memory-orchestrator",
+        "id": "6afaf80133d42f6d0bb59276",
+        "similarity": 0.13415
+      }
+    ]
+  },
+  "elapsed_ms": 376.15
+}

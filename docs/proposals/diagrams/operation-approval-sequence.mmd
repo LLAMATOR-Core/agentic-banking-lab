@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant B as Banking Agent
+  participant P as Доверенный сервис операций
+  participant U as Клиент в интерфейсе банка
+  participant G as Approval Service
+  participant A as АБС
+  B->>P: Предложить операцию
+  P->>P: Проверить реквизиты и создать<br/>неизменяемый intent
+  P-->>U: Точные параметры и версия intent
+  U->>G: Подтвердить выбранный intent
+  G->>P: Проверить owner и актуальность версии
+  G-->>B: Короткоживущий grant на одну операцию
+  B->>A: Запрос + delegated identity + grant
+  A->>A: Проверить подпись, subject,<br/>audience, срок, хеш, лимиты
+  A->>A: Атомарно поглотить grant<br/>и исполнить
+  A-->>B: Сохранённый однозначный результат
+  B-->>U: Результат / ссылка на сверку состояния

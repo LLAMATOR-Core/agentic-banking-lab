@@ -1,0 +1,16 @@
+{
+  "time_utc": "2026-11-12T00:06:03.611462+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8000/v1/lab/memory-recall",
+  "request": {
+    "query": "Какой транспорт и название списка поездок предпочитает customer-001?",
+    "conversation_id": "verify-fresh-ddda7900c3a54a75b287af3f4690e70c"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "user_id": "customer-002",
+    "memories": []
+  },
+  "elapsed_ms": 393.96
+}

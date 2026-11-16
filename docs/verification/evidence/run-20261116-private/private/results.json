@@ -1,0 +1,58 @@
+[
+  {
+    "test": "P08.preference",
+    "status": "PASS",
+    "description": "Ordinary chat promotion: created 2; marker recalled by A=True, B=False. One model attempt.",
+    "evidence": [
+      "http/P08.preference-chat-A.json",
+      "http/P08.preference-collect.json",
+      "http/P08.preference-recall-A.json",
+      "http/P08.preference-recall-B.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:42:55.632654+00:00"
+  },
+  {
+    "test": "P08.preference.cleanup.6afafa4e33d42f6d0bb5927d",
+    "status": "PASS",
+    "description": "Exact created record removed; original working conversation retained.",
+    "evidence": [
+      "http/P08.preference-delete-6afafa4e33d42f6d0bb5927d.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:42:56.007271+00:00"
+  },
+  {
+    "test": "P08.preference.cleanup.6afafa4e33d42f6d0bb5927e",
+    "status": "PASS",
+    "description": "Exact created record removed; original working conversation retained.",
+    "evidence": [
+      "http/P08.preference-delete-6afafa4e33d42f6d0bb5927e.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:42:56.324468+00:00"
+  },
+  {
+    "test": "P08.private-work",
+    "status": "PASS",
+    "description": "Ordinary chat promotion: created 1; marker recalled by A=True, B=False. One model attempt.",
+    "evidence": [
+      "http/P08.private-work-chat-A.json",
+      "http/P08.private-work-collect.json",
+      "http/P08.private-work-recall-A.json",
+      "http/P08.private-work-recall-B.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:43:06.511998+00:00"
+  },
+  {
+    "test": "P08.private-work.cleanup.6afafa5933d42f6d0bb5927f",
+    "status": "PASS",
+    "description": "Exact created record removed; original working conversation retained.",
+    "evidence": [
+      "http/P08.private-work-delete-6afafa5933d42f6d0bb5927f.json"
+    ],
+    "scope": "live HTTP / actual Docker services",
+    "time_utc": "2026-11-16T12:43:06.838803+00:00"
+  }
+]

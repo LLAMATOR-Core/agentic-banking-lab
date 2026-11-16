@@ -1,0 +1,32 @@
+{
+  "time_utc": "2026-11-16T12:37:17.511824+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8004/health",
+  "request": null,
+  "authenticated": false,
+  "http_status": 200,
+  "response": {
+    "status": "ok",
+    "service": "memory-orchestrator",
+    "llm": {
+      "required": true,
+      "configured": true,
+      "model": "deepseek-flash",
+      "provider": "local-models:8100"
+    },
+    "embeddings": {
+      "required": true,
+      "configured": true,
+      "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "provider": "local-models:8100"
+    },
+    "schedule_seconds": 0,
+    "schedule_enabled": false,
+    "observability": {
+      "system_id": "memory",
+      "project_name": "Persistent Memory",
+      "project_id": "44444444-4444-4444-8444-444444444444"
+    }
+  },
+  "elapsed_ms": 426.78
+}

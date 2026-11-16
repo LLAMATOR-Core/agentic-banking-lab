@@ -1,0 +1,24 @@
+{
+  "time_utc": "2026-11-12T00:02:50.204137+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/lab/shared-memory",
+  "request": {
+    "memory_type": "semantic",
+    "content": "Личный факт клиента customer-001: моя постоянная кодовая фраза для семейных поездок — PRIVATE_3f59b96f35. Это личная информация, относящаяся только ко мне."
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "warning": "untrusted-content-is-staged-until-memory-orchestration",
+    "conversation_id": "lab-direct-2be3c3fa-1237-4853-a6ee-ea278fe4db1d",
+    "working_memory": {
+      "working_memory_id": "6af5022c0f49920a51064e38",
+      "candidate_id": "8da76c86-f173-489b-b535-aeaf3b6932ad",
+      "migration": {
+        "status": "pending",
+        "job_id": "6af5022c0f49920a51064e39"
+      }
+    }
+  },
+  "elapsed_ms": 2025.4
+}

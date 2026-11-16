@@ -1,0 +1,12 @@
+{
+  "time_utc": "2026-11-16T12:36:33.734020+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8002/api/v1/working/conversations/banking-agent/customer-001",
+  "request": null,
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "conversations": []
+  },
+  "elapsed_ms": 485.58
+}

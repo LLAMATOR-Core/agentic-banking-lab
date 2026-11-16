@@ -1,0 +1,20 @@
+{
+  "started_utc": "2026-11-16T12:36:02.463956+00:00",
+  "timezone": "Europe/Moscow",
+  "pdf": "СпиридоновМихаилАндреевич_2.pdf",
+  "pdf_sha256": "319cacd395bb9970171c8a20f7f13aef92774903d6e8cd361f457bc47e2593a4",
+  "commit": "5b28bd41f6e03f68fe774ad5005c11c7871593a0",
+  "docker_project": "abl-stage-verification",
+  "config": {
+    "ABS_MCP_MODE": "secure",
+    "FLIGHTS_PROVIDER": "tutu",
+    "FLIGHTS_MOCK_NOTE": "clean.txt",
+    "OPENAI_BASE_URL": "https://api.deepseek.com",
+    "OPENAI_MODEL": "deepseek-flash",
+    "EMBEDDING_MODEL": "text-embedding-3-small",
+    "MEMORY_ORCHESTRATION_INTERVAL_SECONDS": "1800",
+    "AUTH_DISABLED": "false"
+  },
+  "model_key_configured": true,
+  "important": "Baseline of the existing implementation; proposed grant/approval service is not implemented. PASS applies only to the observed subcase."
+}

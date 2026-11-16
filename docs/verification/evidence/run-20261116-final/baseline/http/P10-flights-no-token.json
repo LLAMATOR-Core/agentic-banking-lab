@@ -1,0 +1,16 @@
+{
+  "time_utc": "2026-11-16T12:40:24.605445+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8106/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
+  },
+  "authenticated": false,
+  "http_status": 401,
+  "response": {
+    "detail": "Valid Flights MCP bearer token is required"
+  },
+  "elapsed_ms": 292.84
+}

@@ -1,0 +1,13 @@
+{
+  "time_utc": "2026-11-12T00:30:51.237751+00:00",
+  "method": "DELETE",
+  "url": "http://127.0.0.1:8004/api/v1/procedural/banking-agent/6af508b5021eb4a4fcb4b31b",
+  "request": null,
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "deleted": "6af508b5021eb4a4fcb4b31b",
+    "memory_type": "procedural"
+  },
+  "elapsed_ms": 288.64
+}

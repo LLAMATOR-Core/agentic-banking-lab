@@ -1,0 +1,16 @@
+{
+  "time_utc": "2026-11-12T00:03:14.393859+00:00",
+  "method": "GET",
+  "url": "http://127.0.0.1:8000/v1/lab/memory-recall",
+  "request": {
+    "query": "Как называется справочный раздел о путешествиях в учебном банке?",
+    "conversation_id": "verify-3f59b96f35"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "user_id": "customer-002",
+    "memories": []
+  },
+  "elapsed_ms": 491.19
+}

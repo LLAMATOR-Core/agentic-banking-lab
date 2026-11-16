@@ -1,0 +1,31 @@
+{
+  "time_utc": "2026-11-12T00:03:14.888350+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8000/v1/chat",
+  "request": {
+    "message": "Как называется справочный раздел о путешествиях в учебном банке?",
+    "conversation_id": "verify-answer-P07.control-3f59b96f35"
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "message": "Анна Викторовна, к сожалению, у меня нет данных о точном названии справочного раздела о путешествиях в учебном банке — в доступной мне информации это не указано, поэтому не хочу называть его наугад. Могу помочь с тем, что доступно: показать счета и операции, подготовить перевод или оплату с подтверждением, а также спланировать поездку через партнёра. Уточните, что из этого вам нужно?",
+    "conversation_id": "verify-answer-P07.control-3f59b96f35",
+    "intent": "general",
+    "tool_calls": [
+      "abs.get_customer_info",
+      "llm.route_intent",
+      "llm.compose_response"
+    ],
+    "requires_confirmation": false,
+    "confirmation_id": null,
+    "data": {
+      "memory_context": [],
+      "connections": {
+        "abs_mcp_mode": "secure",
+        "selected_customer_id": null
+      }
+    }
+  },
+  "elapsed_ms": 5043.39
+}

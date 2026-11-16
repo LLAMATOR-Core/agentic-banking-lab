@@ -1,0 +1,20 @@
+{
+  "A": {
+    "id": "account-001",
+    "number": "RU10000000000000000001",
+    "masked_number": "•••• 0001",
+    "kind": "checking",
+    "currency": "RUB",
+    "balance": "245320.40",
+    "status": "active"
+  },
+  "B": {
+    "id": "account-004",
+    "number": "RU20000000000000000001",
+    "masked_number": "•••• 0001",
+    "kind": "checking",
+    "currency": "RUB",
+    "balance": "113450.75",
+    "status": "active"
+  }
+}

@@ -1,0 +1,630 @@
+{
+  "scope": "Component integration: actual BankingSkills and live services; LLM routing and /v1/chat are bypassed.",
+  "checks": [
+    {
+      "case": "P06.foreign-owner",
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245313.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113454.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "result": null,
+      "error": "HTTPStatusError: Client error '404 Not Found' for url 'http://memory-api:8002/api/v1/working/actions/6af4f1fefc946030e0055489?agent_id=banking-agent&user_id=customer-002'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245313.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113454.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      }
+    },
+    {
+      "case": "P06.valid-control",
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245313.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113454.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "result": {
+        "response": "Операция выполнена. Статус: completed.",
+        "data": {
+          "result": {
+            "status": "completed",
+            "operation_id": "602417f3-c8a4-438f-b2f6-b4751319632d",
+            "from_account": "RU10000000000000000001",
+            "to_account": "RU20000000000000000001",
+            "amount": "1.00",
+            "currency": "RUB",
+            "balance_after": "245312.40"
+          }
+        },
+        "tool_calls": [
+          "memory.read_pending_action",
+          "abs.create_transfer",
+          "memory.mark_executed"
+        ]
+      },
+      "error": null,
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245312.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113455.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      }
+    },
+    {
+      "case": "P06.already-executed",
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245312.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113455.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "result": {
+        "response": "Эта операция уже была выполнена; повторного списания не произошло.",
+        "data": {
+          "result": {
+            "status": "completed",
+            "operation_id": "602417f3-c8a4-438f-b2f6-b4751319632d",
+            "from_account": "RU10000000000000000001",
+            "to_account": "RU20000000000000000001",
+            "amount": "1.00",
+            "currency": "RUB",
+            "balance_after": "245312.40"
+          }
+        },
+        "tool_calls": [
+          "memory.read_pending_action"
+        ]
+      },
+      "error": null,
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245312.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113455.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      }
+    },
+    {
+      "case": "P06.expired",
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245312.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113455.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "result": null,
+      "error": "ValueError: Срок подтверждения операции истёк",
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245312.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113455.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      }
+    },
+    {
+      "case": "S05.modified-stored-amount",
+      "before": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245312.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113455.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      },
+      "result": {
+        "response": "Операция выполнена. Статус: completed.",
+        "data": {
+          "result": {
+            "status": "completed",
+            "operation_id": "1e250579-054d-4b27-928f-12658139cc0c",
+            "from_account": "RU10000000000000000001",
+            "to_account": "RU20000000000000000001",
+            "amount": "2.00",
+            "currency": "RUB",
+            "balance_after": "245310.40"
+          }
+        },
+        "tool_calls": [
+          "memory.read_pending_action",
+          "abs.create_transfer",
+          "memory.mark_executed"
+        ]
+      },
+      "error": null,
+      "after": {
+        "A": [
+          {
+            "id": "account-001",
+            "number": "RU10000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "245310.40",
+            "status": "active"
+          },
+          {
+            "id": "account-002",
+            "number": "RU10000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "780000.00",
+            "status": "active"
+          },
+          {
+            "id": "account-003",
+            "number": "RU10000000000000000003",
+            "masked_number": "•••• 0003",
+            "kind": "checking",
+            "currency": "USD",
+            "balance": "1250.00",
+            "status": "active"
+          }
+        ],
+        "B": [
+          {
+            "id": "account-004",
+            "number": "RU20000000000000000001",
+            "masked_number": "•••• 0001",
+            "kind": "checking",
+            "currency": "RUB",
+            "balance": "113457.75",
+            "status": "active"
+          },
+          {
+            "id": "account-005",
+            "number": "RU20000000000000000002",
+            "masked_number": "•••• 0002",
+            "kind": "savings",
+            "currency": "RUB",
+            "balance": "350000.00",
+            "status": "active"
+          }
+        ]
+      }
+    }
+  ],
+  "prepared": {
+    "response": "Подготовлена операция: перевод 1.00 со счёта account-001 на RU20000000000000000001. Проверьте параметры и подтвердите отдельно. Подтверждение действует 15 минут.",
+    "data": {
+      "pending_action": {
+        "type": "transfer",
+        "parameters": {
+          "to_account": "RU20000000000000000001",
+          "amount": "1.00",
+          "description": "PDF P06 component",
+          "from_account": "account-001"
+        }
+      }
+    },
+    "requires_confirmation": true,
+    "confirmation_id": "6af4f1fefc946030e0055489",
+    "tool_calls": [
+      "memory.create_pending_action"
+    ]
+  },
+  "original_before_tampering": {
+    "response": "Подготовлена операция: перевод 1.00 со счёта account-001 на RU20000000000000000001. Проверьте параметры и подтвердите отдельно. Подтверждение действует 15 минут.",
+    "data": {
+      "pending_action": {
+        "type": "transfer",
+        "parameters": {
+          "to_account": "RU20000000000000000001",
+          "amount": "1.00",
+          "description": "PDF P06 component",
+          "from_account": "account-001"
+        }
+      }
+    },
+    "requires_confirmation": true,
+    "confirmation_id": "6af4f200fc946030e005548b",
+    "tool_calls": [
+      "memory.create_pending_action"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "sub": "515ef314-fde8-4f71-8292-8f7674d31187",
+  "azp": "banking-agent",
+  "aud": [
+    "memory-service",
+    "travel-agent",
+    "duckduckgo-mcp",
+    "account"
+  ],
+  "customer_id": null,
+  "exp": 1794832902,
+  "iat": 1794832602,
+  "iss": "http://localhost:8080/realms/agentic-banking"
+}

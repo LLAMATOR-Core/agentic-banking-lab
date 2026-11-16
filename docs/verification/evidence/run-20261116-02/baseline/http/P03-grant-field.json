@@ -1,0 +1,40 @@
+{
+  "time_utc": "2026-11-16T12:36:15.417579+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P03-grant-field",
+    "method": "tools/call",
+    "params": {
+      "name": "create_transfer",
+      "arguments": {
+        "from_account": "account-001",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "description": "PDF verification P03-grant-field",
+        "idempotency_key": "pdf-69066cdf6c2243be8e7d04390305ba1f",
+        "grant": {
+          "owner": "customer-002",
+          "expires_at": "2000-01-01"
+        }
+      }
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P03-grant-field",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "ABS rejected the operation: [{'type': 'extra_forbidden', 'loc': ['body', 'grant'], 'msg': 'Extra inputs are not permitted', 'input': {'owner': 'customer-002', 'expires_at': '2000-01-01'}}]"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "elapsed_ms": 415.16
+}

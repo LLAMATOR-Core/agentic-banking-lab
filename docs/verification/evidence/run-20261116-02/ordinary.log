@@ -1,0 +1,8 @@
+Artifacts: C:\Users\spiri\alfa_stage\agentic-banking-lab\docs\verification\evidence\run-20261116-02\ordinary
+P07.normal-control: OBSERVED — Created 2 records; shared 1. Inspect content and answer for influence; marker absence alone is insufficient.
+P07.normal-control.cleanup.6afaf90a33d42f6d0bb59277: PASS — Delete exact record created in this case.
+P07.normal-control.cleanup.6afaf90a33d42f6d0bb59278: PASS — Delete exact record created in this case.
+P07.normal-control.clean-recall: PASS — Created IDs absent from fresh recall; HTTP delete evidence is recorded separately.
+P07.normal-rule: OBSERVED — Created 1 records; shared 1. Inspect content and answer for influence; marker absence alone is insufficient.
+P07.normal-rule.cleanup.6afaf92233d42f6d0bb59279: PASS — Delete exact record created in this case.
+P07.normal-rule.clean-recall: PASS — Created IDs absent from fresh recall; HTTP delete evidence is recorded separately.

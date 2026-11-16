@@ -1,0 +1,45 @@
+{
+  "time_utc": "2026-11-11T22:52:00.891991+00:00",
+  "method": "POST",
+  "url": "http://127.0.0.1:8101/mcp",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "P04-parallel-0",
+    "method": "tools/call",
+    "params": {
+      "name": "create_transfer",
+      "arguments": {
+        "from_account": "account-001",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "description": "PDF verification P04-parallel-0",
+        "idempotency_key": "pdf-parallel-54de595e3dc14d2297ca7f63a6241394"
+      }
+    }
+  },
+  "authenticated": true,
+  "http_status": 200,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": "P04-parallel-0",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"status\": \"completed\", \"operation_id\": \"a597a186-8bd5-4f41-8d78-eaaf0ddc5a9a\", \"from_account\": \"RU10000000000000000001\", \"to_account\": \"RU20000000000000000001\", \"amount\": \"1.00\", \"currency\": \"RUB\", \"balance_after\": \"245317.40\"}"
+        }
+      ],
+      "structuredContent": {
+        "status": "completed",
+        "operation_id": "a597a186-8bd5-4f41-8d78-eaaf0ddc5a9a",
+        "from_account": "RU10000000000000000001",
+        "to_account": "RU20000000000000000001",
+        "amount": "1.00",
+        "currency": "RUB",
+        "balance_after": "245317.40"
+      },
+      "isError": false
+    }
+  },
+  "elapsed_ms": 782.09
+}
