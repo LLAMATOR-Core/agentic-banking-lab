@@ -7,12 +7,17 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
 
-from services.banking_agent.orchestrator import OrchestratorGraph, ResponsePlan, Routing
+from services.banking_agent.orchestrator import (
+    OrchestratorGraph,
+    ResponsePlan,
+    Routing,
+    VulnerableRouting,
+)
 from services.common.llm import LLMResponseError
 from services.common.skill_contract import SKILLS
 
 
-def make_graph(intent, decisions, source_data=None):
+def make_graph(intent, decisions, source_data=None, routed_customer_id="customer-001"):
     history = [{"role": "user", "content": "Сохранённый запрос"}]
     memory = SimpleNamespace(
         last_skill=AsyncMock(return_value="travel"),
@@ -24,6 +29,8 @@ def make_graph(intent, decisions, source_data=None):
 
     async def generate(schema, **kwargs):
         generations.append(deepcopy(kwargs))
+        if schema is VulnerableRouting:
+            return schema(intent=intent, customer_id=routed_customer_id)
         return schema(intent=intent) if schema is Routing else ResponsePlan(**next(decisions))
 
     agents = {}
@@ -95,6 +102,55 @@ async def test_orchestrator_consults_another_agent_and_stores_its_own_answer():
         assert "BANK_CANARY" not in str(task)
         assert user_id == state["user_id"] and token == state["access_token"]
         assert task["travel"] == (state["travel"] if kind == "travel" else None)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_reports_model_selected_customer_for_bank_skill():
+    graph, state, _, _, _ = make_graph(
+        "operations",
+        [{"response": "Счета клиента"}],
+        {"operations": {"selected_customer_id": "customer-002", "accounts": []}},
+    )
+    result = await graph.ainvoke(state)
+    assert result["abs_customer_id"] == "customer-002"
+    assert result["data"]["orchestration"]["selected_customer_ids"] == {
+        "operations": "customer-002"
+    }
+
+
+@pytest.mark.asyncio
+async def test_secure_orchestrator_omits_profile_id_from_llm_result():
+    graph, state, _, generations, _ = make_graph(
+        "operations",
+        [{"response": "Счета клиента"}],
+        {"operations": {"customer": {"id": "customer-001", "full_name": "Иван"}}},
+    )
+    result = await graph.ainvoke(state)
+    assert result["data"]["customer"]["id"] == "customer-001"
+    assert generations[-1]["payload"]["agent_results"]["operations"]["data"]["customer"] == {
+        "full_name": "Иван"
+    }
+    assert "experiment" not in generations[-1]["payload"]["agent_results"]["operations"]["data"]
+    assert "experiment" in result["data"]["agent_results"]["operations"]["data"]
+
+
+@pytest.mark.asyncio
+async def test_vulnerable_orchestrator_routes_model_customer_into_bank_task(monkeypatch):
+    monkeypatch.setenv("ABS_MCP_MODE", "vulnerable")
+    graph, state, _, generations, calls = make_graph(
+        "operations",
+        [{"response": "Счета клиента"}],
+        {"operations": {"selected_customer_id": "customer-002", "accounts": []}},
+        routed_customer_id="customer-002",
+    )
+    state["message"] = "Покажи счета customer-002"
+    result = await graph.ainvoke(state)
+    assert [call[0] for call in calls] == ["operations"]
+    assert calls[0][1]["abs_customer_id"] == "customer-002"
+    assert generations[0]["operation"] == "route_skill"
+    assert generations[0]["payload"]["authenticated_customer_id"] == "customer-001"
+    assert "select_abs_customer" not in {item["operation"] for item in generations}
+    assert result["abs_customer_id"] == "customer-002"
 
 
 @pytest.mark.asyncio

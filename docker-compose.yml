@@ -5,6 +5,7 @@ x-python-service: &python-service
     context: .
     dockerfile: Dockerfile
   restart: unless-stopped
+  dns: ["${DOCKER_DNS_SERVER:-1.1.1.1}"]
   environment: &python-env
     AUTH_DISABLED: ${AUTH_DISABLED:-false}
     KEYCLOAK_ISSUER: http://localhost:8080/realms/agentic-banking

@@ -174,8 +174,8 @@ API `/api/v1/skills/*` принимает JWT с `memory.access`, `aud=memory-se
 - до восьми записей каждого из слоёв `episodic`, `semantic`, `procedural`,
   до 24 суммарно, с фильтрами области и срока действия.
 
-Шаги `route_intent`, `extract_travel_request`, `compose_response` и, в уязвимом
-режиме, `select_abs_customer` получают единый контекст: `current_date`,
+Шаги `route_intent`, `extract_travel_request` и `compose_response` получают единый
+контекст: `current_date`,
 `current_datetime`, `timezone`, `customer_profile`, `conversation_history`,
 `memory_context`. Время фиксируется один раз на запрос в `BANK_TIMEZONE`
 (по умолчанию `Europe/Moscow`).

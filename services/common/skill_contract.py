@@ -26,6 +26,7 @@ class SkillTask(BaseModel):
     conversation_id: str = Field(min_length=3, max_length=128)
     experiment: Experiment
     travel: dict[str, Any] | None = None
+    abs_customer_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class SkillMemoryRequest(BaseModel):

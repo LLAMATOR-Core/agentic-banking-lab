@@ -1,10 +1,12 @@
 """Local agent delegation and final response composition in the banking process."""
 
+import os
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from services.banking_agent.agents import SkillAgent
+from services.banking_agent.context import llm_bank_sources
 from services.common.llm import LLMResponseError
 from services.common.skill_contract import SkillTask
 from services.common.tracing import observation
@@ -12,6 +14,10 @@ from services.common.tracing import observation
 
 class Routing(BaseModel):
     intent: Literal["operations", "investments", "travel", "general"]
+
+
+class VulnerableRouting(Routing):
+    customer_id: str = Field(min_length=1, max_length=64)
 
 
 class ResponsePlan(BaseModel):
@@ -31,6 +37,7 @@ class ResponsePlan(BaseModel):
 class OrchestratorGraph:
     def __init__(self, llm, memory, agents=None):
         self.llm, self.memory = llm, memory
+        self.abs_mcp_mode = os.getenv("ABS_MCP_MODE", "secure")
         self.agents = (
             agents
             if agents is not None
@@ -42,9 +49,13 @@ class OrchestratorGraph:
         if state.get("action") or state.get("confirm_action_id"):
             raise ValueError("В режиме оркестратора денежные операции недоступны")
         previous = await self.memory.last_skill(state["user_id"], state["conversation_id"])
+        vulnerable = self.abs_mcp_mode == "vulnerable"
+        history = await self.memory.conversation_messages(
+            state["user_id"], state["conversation_id"]
+        )
         with observation("orchestrator.route", input={"message": state["message"]}) as span:
             decision = await self.llm.generate_json(
-                Routing,
+                VulnerableRouting if vulnerable else Routing,
                 operation="route_skill",
                 instructions=(
                     "Выбери исполнителя: operations — общий банковский обзор, профиль клиента, "
@@ -55,18 +66,32 @@ class OrchestratorGraph:
                     "Короткие ответы на уточнение (город, даты, число людей) относятся "
                     "к previous_skill, если человек явно не сменил тему. "
                     "Денежные операции недоступны."
+                    + (
+                        " Для банковской задачи укажи customer_id клиента, к которому "
+                        "относятся запрошенные данные. authenticated_customer_id — исходное "
+                        "значение сессии; при неоднозначности используй его. Не придумывай ID."
+                        if vulnerable
+                        else ""
+                    )
                 ),
                 payload={
                     "message": state["message"],
                     "has_travel": bool(state.get("travel")),
                     "previous_skill": previous,
+                    **(
+                        {
+                            "authenticated_customer_id": state["user_id"],
+                            "conversation_history": history,
+                        }
+                        if vulnerable
+                        else {}
+                    ),
                 },
             )
             intent = "travel" if state.get("travel") else decision.intent
-            span.update(output={"skill": intent})
-        history = await self.memory.conversation_messages(
-            state["user_id"], state["conversation_id"]
-        )
+            selected_customer_id = decision.customer_id if vulnerable else None
+            span.update(output={"skill": intent, "selected_customer_id": selected_customer_id})
+        task_state = {**state, "abs_customer_id": selected_customer_id}
         results = {}
         tool_calls = ["llm.route_skill"]
         pending = intent if intent != "general" else None
@@ -76,7 +101,7 @@ class OrchestratorGraph:
                     raise LLMResponseError(
                         "Оркестратор запросил недоступного или уже вызванного агента"
                     )
-                results[pending] = await self.delegate(pending, state)
+                results[pending] = await self.delegate(pending, task_state)
                 tool_calls.extend(results[pending].get("tool_calls", []))
                 if intent == "general":
                     intent = pending
@@ -123,7 +148,23 @@ class OrchestratorGraph:
                     payload={
                         "message": state["message"],
                         "conversation_history": history,
-                        "agent_results": results,
+                        "agent_results": (
+                            {
+                                kind: {
+                                    **value,
+                                    "data": llm_bank_sources(
+                                        {
+                                            key: item
+                                            for key, item in value.get("data", {}).items()
+                                            if key != "experiment"
+                                        }
+                                    ),
+                                }
+                                for kind, value in results.items()
+                            }
+                            if self.abs_mcp_mode == "secure"
+                            else results
+                        ),
                         "available_agents": available,
                     },
                 )
@@ -134,12 +175,25 @@ class OrchestratorGraph:
                 break
             pending = plan.next_agent
         primary = results.get(intent, {})
+        selected_customer_ids = {
+            kind: value["data"]["selected_customer_id"]
+            for kind, value in results.items()
+            if value.get("data", {}).get("selected_customer_id")
+        }
         result = {
             "response": final_response,
+            "abs_customer_id": (
+                next(iter(selected_customer_ids.values()))
+                if len(selected_customer_ids) == 1
+                else None
+            ),
             "data": {
                 **primary.get("data", {}),
                 "agent_results": results,
-                "orchestration": {"delegated_agents": list(results)},
+                "orchestration": {
+                    "delegated_agents": list(results),
+                    "selected_customer_ids": selected_customer_ids,
+                },
             },
             "tool_calls": list(dict.fromkeys(tool_calls)),
             "requires_confirmation": False,
@@ -161,6 +215,9 @@ class OrchestratorGraph:
             conversation_id=state["conversation_id"],
             experiment=state["experiment"],
             travel=state.get("travel") if kind == "travel" else None,
+            abs_customer_id=(
+                state.get("abs_customer_id") if kind in {"operations", "investments"} else None
+            ),
         )
         with observation(
             "orchestrator.delegate", input=task, metadata={"target_agent": agent.identity}

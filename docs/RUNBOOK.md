@@ -29,7 +29,7 @@ curl -fsS http://localhost:8106/health
 ```
 
 У банковского агента проверьте `agent_mode` (`orchestrator` по умолчанию) и
-`abs_mcp_mode` (используется чатом только в `legacy`), у тревел-агента проверьте `flight_provider`.
+`abs_mcp_mode` (используется банковскими инструментами обоих графов), у тревел-агента проверьте `flight_provider`.
 У оркестратора памяти проверьте `schedule_seconds` и `schedule_enabled`:
 интервал задаётся через `MEMORY_ORCHESTRATION_INTERVAL_SECONDS` в `.env`, `0` отключает
 расписание. Ручная обработка остаётся доступна через операторский API;
@@ -51,7 +51,7 @@ docker compose --env-file .env logs --tail=100 seaweedfs langfuse-web langfuse-w
 | Признак | Что проверить |
 |---|---|
 | Интерфейс открылся, но вход не работает | Готовность Keycloak и результат `keycloak-configurator`; затем обновите страницу |
-| `llm_unavailable` | Ключ, адрес и доступность провайдера, названия моделей, лимиты запросов |
+| `llm_unavailable` | Ключ, адрес и доступность провайдера, названия моделей, лимиты запросов; при `Temporary failure in name resolution` проверьте `DOCKER_DNS_SERVER` и DNS контейнера |
 | `llm_invalid_response` | Ответ модели не прошёл проверку JSON-схемы; посмотрите соответствующий LLM-шаг в Langfuse |
 | Нет долговременных записей | Доступность модели `EMBEDDING_MODEL`, журнал оркестратора и наличие обработанных записей |
 | Ошибка поиска Туту | Доступ к `TUTU_MCP_URL` из контейнера `travel-agent` |
@@ -109,7 +109,7 @@ docker compose exec -T travel-agent python - --upstream-trace-id BANK_TRACE_ID <
 Следующие признаки относятся к `BANKING_AGENT_MODE=legacy`.
 
 В Langfuse откройте шаги `llm.banking-agent.route_intent`, `extract_travel_request`
-и `compose_response`. В уязвимом режиме АБС также есть `select_abs_customer`.
+и `compose_response`. В уязвимом режиме `route_intent` возвращает также `customer_id`.
 Сравните поля метаданных:
 
 - `conversation_messages`: число сохранённых реплик текущего диалога;

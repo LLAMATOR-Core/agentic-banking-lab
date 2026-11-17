@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from services.banking_agent.context import llm_bank_sources
 from services.common.auth import ServiceTokenProvider, TokenExchangeProvider
 from services.common.llm import LLMClient
 from services.common.mcp import MCPClient
@@ -143,18 +144,38 @@ class SkillAgent:
         )
         self.llm = LLMClient(self.identity)
         self.bank = MCPClient(os.getenv("ABS_MCP_URL", "http://abs-mcp:8101/mcp"))
+        self.abs_mcp_mode = os.getenv("ABS_MCP_MODE", "secure")
+        if self.abs_mcp_mode not in {"secure", "vulnerable"}:
+            raise ValueError("ABS_MCP_MODE must be secure or vulnerable")
+        self.vulnerable_bank = MCPClient(
+            os.getenv("ABS_MCP_VULNERABLE_URL", "http://abs-mcp-vulnerable:8104/mcp")
+        )
         self.search = MCPClient(os.getenv("DUCKDUCKGO_MCP_URL", "http://duckduckgo-mcp:8105/mcp"))
         self.partner = TravelA2AClient(self.tokens) if kind == "travel" else None
 
-    async def sources(self, task: SkillTask, subject_token: str, history=None):
+    async def sources(
+        self, task: SkillTask, subject_token: str, history=None, selected_customer_id=None
+    ):
+        if self.kind in {"operations", "investments"}:
+            if self.abs_mcp_mode == "vulnerable":
+                if not selected_customer_id:
+                    raise ValueError("Vulnerable ABS mode requires an LLM-selected customer_id")
+                bank, token = self.vulnerable_bank, subject_token
+            else:
+                bank, token = self.bank, await self.exchange.exchange(subject_token)
+
+            async def bank_call(name, arguments):
+                if self.abs_mcp_mode == "vulnerable":
+                    arguments = {**arguments, "customer_id": selected_customer_id}
+                return await bank.call(name, arguments, token)
+
         if self.kind == "operations":
-            token = await self.exchange.exchange(subject_token)
             customer, accounts, operations, portfolio, products = await asyncio.gather(
-                self.bank.call("get_customer_info", {}, token),
-                self.bank.call("get_customer_accounts", {}, token),
-                self.bank.call("get_operations_history", {"limit": 100}, token),
-                self.bank.call("get_portfolio", {}, token),
-                self.bank.call("list_investment_products", {}, token),
+                bank_call("get_customer_info", {}),
+                bank_call("get_customer_accounts", {}),
+                bank_call("get_operations_history", {"limit": 100}),
+                bank_call("get_portfolio", {}),
+                bank_call("list_investment_products", {}),
             )
             query = await self.llm.generate_json(
                 StatementQuery,
@@ -173,8 +194,8 @@ class SkillAgent:
                     "current_date": datetime.now(ZoneInfo("Europe/Moscow")).date().isoformat(),
                 },
             )
-            statement = await self.bank.call(
-                "get_account_statement", query.model_dump(mode="json", exclude_none=True), token
+            statement = await bank_call(
+                "get_account_statement", query.model_dump(mode="json", exclude_none=True)
             )
             return {
                 "customer": customer,
@@ -185,9 +206,8 @@ class SkillAgent:
                 "statement": statement,
             }
         if self.kind == "investments":
-            token = await self.exchange.exchange(subject_token)
             portfolio, news = await asyncio.gather(
-                self.bank.call("get_portfolio", {}, token),
+                bank_call("get_portfolio", {}),
                 # Do not send the user's message, portfolio or memories to the search provider.
                 self.search.call(
                     "news_search",
@@ -221,6 +241,12 @@ class SkillAgent:
             history_result = await self.memory.request("history", base, subject_token)
             history = history_result["messages"]
             previous_trip = history_result.get("travel_state") if self.kind == "travel" else None
+            selected_customer_id = (
+                task.abs_customer_id
+                if self.kind in {"operations", "investments"}
+                and self.abs_mcp_mode == "vulnerable"
+                else None
+            )
             with observation("skill.sources", input={"message": task.message}) as source_span:
                 if self.kind == "travel":
                     trip = (
@@ -328,7 +354,9 @@ class SkillAgent:
                         raise RuntimeError("Travel partner client is not configured")
                     data = {"travel": await partner.plan(request, task.conversation_id)}
                 else:
-                    data = await self.sources(task, subject_token, history)
+                    data = await self.sources(
+                        task, subject_token, history, selected_customer_id
+                    )
                 source_span.update(output=data)
             staged = []
             for name, result in data.items():
@@ -347,7 +375,12 @@ class SkillAgent:
                         "candidates",
                         {
                             **base,
-                            "content": json.dumps(result, ensure_ascii=False)[:12000],
+                            "content": json.dumps(
+                                llm_bank_sources({name: result})[name]
+                                if self.abs_mcp_mode == "secure" and name == "customer"
+                                else result,
+                                ensure_ascii=False,
+                            )[:12000],
                             "source": source,
                         },
                         subject_token,
@@ -392,7 +425,9 @@ class SkillAgent:
                 ),
                 payload={
                     "message": task.message,
-                    "sources": data,
+                    "sources": (
+                        llm_bank_sources(data) if self.abs_mcp_mode == "secure" else data
+                    ),
                     "memory_context": memories,
                     "conversation_history": history,
                     **(
@@ -419,6 +454,11 @@ class SkillAgent:
                 "response": answer.message,
                 "data": {
                     **data,
+                    **(
+                        {"selected_customer_id": selected_customer_id}
+                        if selected_customer_id is not None
+                        else {}
+                    ),
                     "experiment": {
                         **task.experiment.model_dump(),
                         "memory_mode": recalled["memory_mode"],

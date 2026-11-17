@@ -424,14 +424,13 @@ async def test_banking_graph_records_every_executed_node(monkeypatch, recorded):
     assert [r["name"].removeprefix("banking.step.") for r in steps] == [
         "recall_memory",
         "classify",
-        "select_abs_identity",
         "general",
         "compose_response",
         "persist_memory",
     ]
     assert all(r["trace_id"] == recorded[0]["trace_id"] for r in steps)
     assert all(r["parent_id"] == recorded[0]["id"] for r in steps)
-    assert steps[3]["input"]["state"]["memories"] == [{"content": "remembered fact"}]
-    assert steps[3]["output"]["data"]["fact"] == "skill result"
+    assert steps[2]["input"]["state"]["memories"] == [{"content": "remembered fact"}]
+    assert steps[2]["output"]["data"]["fact"] == "skill result"
     assert result["response"] == "final answer"
     assert "USER_JWT" not in json.dumps(recorded)

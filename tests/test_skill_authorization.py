@@ -309,6 +309,7 @@ def test_imported_realm_emits_subject_without_granting_extra_resource_scopes():
 async def test_each_local_agent_uses_only_its_sources_and_records_memory_jobs(kind, monkeypatch):
     from services.banking_agent.agents import SkillAgent
 
+    monkeypatch.setenv("ABS_MCP_MODE", "secure")
     worker = SkillAgent(kind)
     assert worker.exchange.client_id == worker.identity
     assert worker.memory.exchange.client_id == worker.identity
@@ -322,6 +323,8 @@ async def test_each_local_agent_uses_only_its_sources_and_records_memory_jobs(ki
 
     async def bank_call(name, args, token):
         calls.append((name, token))
+        if name == "get_customer_info":
+            return {"id": "customer-001", "full_name": "Иван"}
         return [{"source": name}]
 
     async def search_call(name, args, token):
@@ -391,6 +394,13 @@ async def test_each_local_agent_uses_only_its_sources_and_records_memory_jobs(ki
         "travel": ["a2a"],
     }[kind]
     assert generations[-1]["payload"]["memory_context"][0]["content"] == "PRIVATE_MEMORY_CANARY"
+    if kind == "operations":
+        assert result["data"]["customer"]["id"] == "customer-001"
+        assert generations[-1]["payload"]["sources"]["customer"] == {
+            "full_name": "Иван"
+        }
+        customer_candidate = next(item for item in staged if item["source"] == "bank-profile")
+        assert json.loads(customer_candidate["content"]) == {"full_name": "Иван"}
     assert result["data"]["experiment"]["recalled_memory_ids"] == ["recalled-001"]
     assert all(p["experiment"]["run_id"] == "run-001" for p in staged)
 
