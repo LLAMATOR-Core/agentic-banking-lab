@@ -56,7 +56,11 @@ abs_mcp_vulnerable = MCPClient(
 
 app = FastAPI(title="Banking LangGraph Agent", version="0.1.0")
 install_llm_error_handlers(app)
-install_experiment_middleware(app, accept_remote_parent=False)
+install_experiment_middleware(
+    app,
+    accept_remote_parent=False,
+    agent_routes={("POST", "/v1/chat"): "banking-agent.request"},
+)
 
 
 @app.exception_handler(httpx.TimeoutException)
@@ -167,7 +171,6 @@ async def conversation_messages(conversation_id: str, caller: Caller) -> dict[st
 
 
 @app.post("/v1/chat", response_model=ChatResponse)
-@traced("banking.api.chat", system_boundary=True, agent_id="banking-agent")
 async def chat(
     request: ChatRequest,
     caller: Caller,

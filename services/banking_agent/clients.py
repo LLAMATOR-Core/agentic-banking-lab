@@ -8,7 +8,7 @@ import httpx
 
 from services.common.auth import ServiceTokenProvider
 from services.common.llm import raise_upstream_llm_error
-from services.common.tracing import observation, trace_headers, traced
+from services.common.tracing import observation, trace_headers
 
 
 class MemoryClient:
@@ -144,13 +144,21 @@ class MemoryClient:
             },
         )
 
-    @traced("memory.client.request")
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         token = await self.tokens.get()
+        payload = kwargs.get("json")
+        layers = (
+            payload.get("memory_types")
+            if path == "/api/v1/context" and isinstance(payload, dict)
+            else None
+        )
+        layer = "working" if path.startswith("/api/v1/working/") else None
         with observation(
-            "memory.http",
+            "memory.client.call",
             input={"method": method, "path": path, **kwargs},
             metadata={"endpoint": self.base_url},
+            memory_layer=layer,
+            memory_layers=layers,
         ) as span:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.request(

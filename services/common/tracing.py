@@ -29,6 +29,8 @@ except ImportError:  # pragma: no cover - lets minimal tooling import the projec
 
 _experiment = ContextVar("experiment", default=None)
 _upstream_trace = ContextVar("upstream_trace", default=None)
+_request_trace_enabled = ContextVar("request_trace_enabled", default=True)
+MEMORY_LAYERS = frozenset({"working", "episodic", "semantic", "procedural"})
 
 
 @contextmanager
@@ -123,6 +125,8 @@ def observation(
     as_type: str = "span",
     model: str | None = None,
     model_parameters: dict[str, Any] | None = None,
+    memory_layer: str | None = None,
+    memory_layers: list[str] | None = None,
 ):
     """Create an observation and propagate trace identity to all nested observations.
 
@@ -130,7 +134,12 @@ def observation(
     set trace attributes.  ``propagate_attributes`` writes user/session fields
     to the current trace and propagates agent metadata to child LLM spans.
     """
-    if get_client is None or propagate_attributes is None or not os.getenv("LANGFUSE_PUBLIC_KEY"):
+    if (
+        not _request_trace_enabled.get()
+        or get_client is None
+        or propagate_attributes is None
+        or not os.getenv("LANGFUSE_PUBLIC_KEY")
+    ):
         yield NullObservation()
         return
     source_metadata = {
@@ -140,6 +149,12 @@ def observation(
     }
     resolved_agent_id = agent_id or _optional_string(source_metadata.get("agent_id"))
     trace_metadata = dict(source_metadata)
+    if memory_layer in MEMORY_LAYERS:
+        trace_metadata["memory_layer"] = memory_layer
+    if memory_layers is not None:
+        trace_metadata["memory_layers"] = [
+            layer for layer in memory_layers if layer in MEMORY_LAYERS
+        ]
     system_id = os.getenv("AGENT_SYSTEM_ID")
     if system_id:
         trace_metadata["system_id"] = system_id
@@ -178,6 +193,8 @@ def observation(
         tags = [f"system:{system_id}"] if system_id else []
         if resolved_agent_id:
             tags.append(f"agent:{resolved_agent_id}")
+        if memory_layer in MEMORY_LAYERS:
+            tags.append(f"memory:{memory_layer}")
         try:
             span = stack.enter_context(manager)
             stack.enter_context(
@@ -207,7 +224,12 @@ def observation(
 
 
 def traced(
-    name: str, *, as_type: str = "span", system_boundary: bool = False, agent_id: str | None = None
+    name: str,
+    *,
+    as_type: str = "span",
+    system_boundary: bool = False,
+    agent_id: str | None = None,
+    memory_layer: str | None = None,
 ):
     """Trace async graph steps and validated API handlers, preserving their signatures."""
 
@@ -245,6 +267,8 @@ def traced(
                 user_id=context.get("user_id") or getattr(caller, "customer_id", None),
                 session_id=session_id,
                 metadata={"endpoint": endpoint} if endpoint else None,
+                memory_layer=memory_layer or context.get("memory_type"),
+                memory_layers=context.get("memory_types"),
             ) as span:
                 result = await function(*args, **kwargs)
                 span.update(output=result)
@@ -270,8 +294,14 @@ def trace_headers() -> dict[str, str]:
     return headers
 
 
-def install_experiment_middleware(app, *, accept_remote_parent: bool = True):
-    """Keep each HTTP request isolated; internal calls inherit only its W3C parent."""
+def install_experiment_middleware(
+    app,
+    *,
+    accept_remote_parent: bool = True,
+    agent_routes: dict[tuple[str, str], str] | None = None,
+    trace_mcp_calls: bool = False,
+):
+    """Trace agent entrypoints and joined MCP tool calls, not routine HTTP traffic."""
 
     @app.middleware("http")
     async def labels(request, call_next):
@@ -286,36 +316,46 @@ def install_experiment_middleware(app, *, accept_remote_parent: bool = True):
             mcp_parent(request.headers) if accept_remote_parent else nullcontext(),
             experiment_context(metadata),
         ):
-            if request.url.path in {
-                "/health",
-                "/docs",
-                "/openapi.json",
-                "/.well-known/agent-card.json",
-            }:
-                return await call_next(request)
+            route_name = (agent_routes or {}).get((request.method, request.url.path))
+            mcp_call = trace_mcp_calls and request.method == "POST" and request.url.path == "/mcp"
             payload = None
-            if "application/json" in request.headers.get("content-type", "") or (
-                "application/a2a+json" in request.headers.get("content-type", "")
-            ):
-                try:
-                    payload = await request.json()
-                except ValueError:
-                    pass
-            correlation = payload.get("conversation_id") if isinstance(payload, dict) else None
-            if isinstance(payload, dict) and isinstance(payload.get("message"), dict):
-                correlation = correlation or payload["message"].get("contextId")
-            with observation(
-                f"HTTP {request.method} {request.url.path}",
-                input={"method": request.method, "path": request.url.path, "body": payload},
-                session_id=correlation,
-                system_boundary=True,
-            ) as span:
-                response = await call_next(request)
-                span.update(
-                    output={"status_code": response.status_code},
-                    **({"level": "ERROR"} if response.status_code >= 400 else {}),
-                )
-                return response
+            if route_name or mcp_call:
+                if "application/json" in request.headers.get("content-type", "") or (
+                    "application/a2a+json" in request.headers.get("content-type", "")
+                ):
+                    try:
+                        payload = await request.json()
+                    except ValueError:
+                        pass
+            joined_mcp_call = (
+                mcp_call
+                and isinstance(payload, dict)
+                and payload.get("method") == "tools/call"
+                and get_current_span().get_span_context().is_valid
+                and request.headers.get("x-agent-system-id") == os.getenv("AGENT_SYSTEM_ID")
+            )
+            enabled = bool(route_name or joined_mcp_call)
+            marker = _request_trace_enabled.set(enabled)
+            try:
+                if not route_name:
+                    return await call_next(request)
+                correlation = payload.get("conversation_id") if isinstance(payload, dict) else None
+                if isinstance(payload, dict) and isinstance(payload.get("message"), dict):
+                    correlation = correlation or payload["message"].get("contextId")
+                with observation(
+                    route_name,
+                    input={"method": request.method, "path": request.url.path, "body": payload},
+                    session_id=correlation,
+                    system_boundary=True,
+                ) as span:
+                    response = await call_next(request)
+                    span.update(
+                        output={"status_code": response.status_code},
+                        **({"level": "ERROR"} if response.status_code >= 400 else {}),
+                    )
+                    return response
+            finally:
+                _request_trace_enabled.reset(marker)
 
 
 @contextmanager

@@ -138,7 +138,7 @@ async def test_llm_attempts_capture_actual_messages_raw_answers_and_usage(
 
 
 @pytest.mark.asyncio
-async def test_mcp_http_and_server_results_join_the_callers_trace(monkeypatch, recorded):
+async def test_mcp_tool_result_joins_the_agent_trace_without_protocol_noise(monkeypatch, recorded):
     monkeypatch.setenv("AUTH_DISABLED", "true")
 
     async def echo(arguments, principal):
@@ -154,22 +154,14 @@ async def test_mcp_http_and_server_results_join_the_callers_trace(monkeypatch, r
     with tracing.observation("turn"):
         result = await client.call("echo", {"text": "full result"}, "USER_JWT")
     server = next(row for row in recorded if row["name"] == "mcp.tool.call")
-    http = next(
-        row
-        for row in recorded
-        if row["name"] == "mcp.http" and row["input"]["method"] == "tools/call"
-    )
+    caller = next(row for row in recorded if row["name"] == "mcp.client.call")
     assert len({row["trace_id"] for row in recorded}) == 1
-    receiver = next(
-        row
-        for row in recorded
-        if row["name"] == "HTTP POST /mcp" and row["input"]["body"]["method"] == "tools/call"
-    )
-    assert receiver["parent_id"] == http["id"]
-    assert server["parent_id"] == receiver["id"]
+    assert server["parent_id"] == caller["id"]
     assert server["input"]["arguments"] == {"text": "full result"}
     assert server["output"] == {"text": "full result", "nested": {"token": "[REDACTED]"}}
-    assert http["output"]["result"]["structuredContent"] == server["output"]
+    assert caller["output"] == server["output"]
+    assert not any(row["name"].startswith("HTTP ") for row in recorded)
+    assert not any(row["name"] == "mcp.client.rpc" for row in recorded)
     assert result["nested"]["token"] == "HIDDEN"
     assert "USER_JWT" not in json.dumps(recorded)
 
@@ -206,7 +198,9 @@ async def test_http_requests_have_one_tree_across_services_and_do_not_mix(record
             return {"ok": True}
 
     bank = FastAPI()
-    tracing.install_experiment_middleware(bank, accept_remote_parent=False)
+    tracing.install_experiment_middleware(
+        bank, accept_remote_parent=False, agent_routes={("POST", "/chat"): "banking-agent.request"}
+    )
 
     @bank.post("/chat")
     @tracing.traced("banking.api.chat", system_boundary=True)
@@ -225,6 +219,12 @@ async def test_http_requests_have_one_tree_across_services_and_do_not_mix(record
         with tracing.observation("banking.turn", session_id=payload["conversation_id"]):
             return await asyncio.gather(call("memory"), call("travel"))
 
+    @bank.get("/dashboard")
+    @tracing.traced("banking.api.dashboard")
+    async def dashboard():
+        with tracing.observation("banking.dashboard"):
+            return {"ok": True}
+
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=bank), base_url="http://bank"
     ) as client:
@@ -241,29 +241,35 @@ async def test_http_requests_have_one_tree_across_services_and_do_not_mix(record
                 for i in range(2)
             ]
         )
+        dashboard_response = await client.get("/dashboard")
     assert all(response.status_code == 200 for response in responses)
+    assert dashboard_response.status_code == 200
     roots = [row for row in recorded if row["parent_id"] is None]
     assert len(roots) == 2
-    assert all(row["name"] == "HTTP POST /chat" for row in roots)
+    assert all(row["name"] == "banking-agent.request" for row in roots)
     assert len({row["trace_id"] for row in recorded}) == 2
     for root in roots:
         tree = [row for row in recorded if row["trace_id"] == root["trace_id"]]
-        assert len(tree) == 11
+        assert len(tree) == 5
         ids = {row["id"] for row in tree}
         assert all(row is root or row["parent_id"] in ids for row in tree)
-        assert {row["name"] for row in tree} >= {"memory.step", "travel.step"}
+        assert {row["name"] for row in tree} >= {"memory.http", "travel.http"}
+        assert not any(row["name"] == "internal.request" for row in tree)
         assert root["trace_id"] != int("1" * 32, 16)
 
 
 @pytest.mark.asyncio
-async def test_memory_read_and_working_write_have_full_api_payloads(monkeypatch, recorded):
+async def test_memory_reads_and_writes_stay_in_the_agent_trace(monkeypatch, recorded):
+    from services.banking_agent.clients import MemoryClient
     from services.memory_service import app as memory
 
     monkeypatch.setenv("AUTH_DISABLED", "true")
     memories = [{"id": "memory-1", "content": "Retrieved fact", "memory_type": "episodic"}]
     store = SimpleNamespace(
         ensure_ready=lambda: None,
-        search=AsyncMock(return_value=memories),
+        search=AsyncMock(
+            side_effect=lambda **kwargs: memories if kwargs["memory_type"] == "episodic" else []
+        ),
         memories=SimpleNamespace(
             insert_many=AsyncMock(
                 return_value=SimpleNamespace(
@@ -277,40 +283,31 @@ async def test_memory_read_and_working_write_have_full_api_payloads(monkeypatch,
     )
     monkeypatch.setattr(memory, "store", store)
     monkeypatch.setattr(memory.embeddings, "embed", AsyncMock(return_value=[0.1, 0.2]))
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=memory.app), base_url="http://memory.test"
-    ) as client:
-        recall = await client.post(
-            "/api/v1/context",
-            json={
-                "agent_id": "banking-agent",
-                "user_id": "customer-001",
-                "query": "Full query",
-                "conversation_id": "session",
-                "memory_types": ["episodic"],
-            },
+    original_client = httpx.AsyncClient
+    transport = httpx.ASGITransport(app=memory.app)
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kw: original_client(transport=transport, **kw)
+    )
+    client = MemoryClient(SimpleNamespace(get=AsyncMock(return_value="service-token")))
+    with tracing.observation("banking-agent.turn"):
+        recall = await client.recall("customer-001", "Full query", "session")
+        stored = await client.store_turn(
+            user_id="customer-001",
+            conversation_id="session",
+            user_message="Full user message",
+            assistant_message="Full assistant message",
+            intent="general",
+            tool_calls=[],
         )
-        assert recall.status_code == 200
-        stored = await client.post(
-            "/api/v1/working/turns",
-            json={
-                "agent_id": "banking-agent",
-                "user_id": "customer-001",
-                "conversation_id": "session",
-                "user_message": "Full user message",
-                "assistant_message": "Full assistant message",
-                "intent": "general",
-                "tool_calls": [],
-            },
-        )
-        assert stored.status_code == 202
-    read = next(row for row in recorded if row["name"] == "memory.api.enrich_context")
-    write = next(row for row in recorded if row["name"] == "memory.api.store_conversation_turn")
-    assert read["input"]["payload"]["query"] == "Full query"
+    read, write = [row for row in recorded if row["name"] == "memory.client.call"]
+    assert read["input"]["json"]["query"] == "Full query"
     assert read["output"]["memories"] == memories
-    assert write["input"]["payload"]["assistant_message"] == "Full assistant message"
+    assert write["input"]["json"]["assistant_message"] == "Full assistant message"
     assert write["output"]["migration"]["job_id"] == "job-1"
-    assert read["metadata"]["correlation_id"] == write["metadata"]["correlation_id"] == "session"
+    assert recall == memories
+    assert stored["migration"]["job_id"] == "job-1"
+    assert len({row["trace_id"] for row in recorded}) == 1
+    assert not any(row["name"].startswith("memory.api.") for row in recorded)
 
 
 def test_disabled_or_failed_telemetry_does_not_break_the_operation(monkeypatch, recorded):

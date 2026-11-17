@@ -1,4 +1,4 @@
-"""Verify one tree per incoming request using only the current system's Langfuse key."""
+"""Verify agent turn trees in Banking and Travel Langfuse projects."""
 
 import argparse
 import json
@@ -10,10 +10,10 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 
-def check_tree(rows):
+def check_tree(rows, expected_root):
     roots = [row for row in rows if not row.get("parentObservationId")]
-    if len(roots) != 1 or not roots[0]["name"].startswith("HTTP "):
-        raise ValueError(f"Expected one HTTP root, got {[r['name'] for r in roots]}")
+    if len(roots) != 1 or roots[0]["name"] != expected_root:
+        raise ValueError(f"Expected one {expected_root} root, got {[r['name'] for r in roots]}")
     ids = {row["id"] for row in rows}
     if any(row.get("parentObservationId") not in ids for row in rows if row not in roots):
         raise ValueError("Missing parent observations")
@@ -29,6 +29,10 @@ def main():
     )
     args = parser.parse_args()
     system = os.environ["AGENT_SYSTEM_ID"]
+    if system not in {"banking", "travel"}:
+        raise ValueError(
+            "This check covers agent turns in Banking and Travel; memory jobs have separate traces"
+        )
     session = "trace-smoke-" + str(uuid.uuid4())
     started = datetime.now(UTC) - timedelta(minutes=15)
     collector = os.environ["LANGFUSE_BASE_URL"]
@@ -99,16 +103,15 @@ def main():
             filters = {"sessionId": session}
         required = {
             "banking": {
-                "banking.api.chat",
+                "banking-agent.turn",
                 "oauth.authorize",
                 "skill.turn",
-                "a2a.http",
-                "skill.memory",
+                "a2a.travel.call",
+                "memory.skill.http.context",
                 "orchestrator.compose",
                 "llm.banking-agent.orchestrator_response",
             },
             "travel": {"a2a.travel.send-message", "mcp.tool.call", "oauth.authorize"},
-            "memory": {"memory.skill.recall", "embedding.memory-service", "oauth.authorize"},
         }[system]
         deadline = time.monotonic() + 120
         last_error = "No observations delivered"
@@ -120,7 +123,7 @@ def main():
             try:
                 for trace_id in sorted(trace_ids):
                     rows = observations(traceId=trace_id)
-                    root = check_tree(rows)
+                    root = check_tree(rows, f"{system}-agent.request")
                     assert all(
                         row["projectId"] == os.environ["LANGFUSE_PROJECT_ID"] for row in rows
                     )

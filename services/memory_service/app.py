@@ -154,6 +154,7 @@ async def enrich_context(payload: ContextRequest, _: Caller) -> dict[str, Any]:
         session_id=payload.conversation_id,
         agent_id="memory-service",
         metadata={"client_agent_id": payload.agent_id},
+        memory_layers=payload.memory_types,
     ) as span:
         vector = await embeddings.embed(payload.query)
         for memory_type in ("episodic", "semantic", "procedural"):
@@ -167,21 +168,33 @@ async def enrich_context(payload: ContextRequest, _: Caller) -> dict[str, Any]:
                 limit=payload.limit_per_layer,
             )
         if "working" in payload.memory_types:
-            selector: dict[str, Any] = {
-                "agent_id": payload.agent_id,
-                "user_id": payload.user_id,
-                "memory_type": "working",
-                "metadata.message_role": {"$in": ["user", "assistant", "external-source"]},
-            }
-            if payload.conversation_id:
-                selector["conversation_id"] = payload.conversation_id
-            rows = (
-                await store.memories.find(selector)
-                .sort("created_at", DESCENDING)
-                .limit(payload.limit_per_layer * 2)
-                .to_list()
-            )
-            layers["working"] = [serialize(row) for row in reversed(rows)]
+            with observation(
+                "memory.store.search",
+                input={
+                    "agent_id": payload.agent_id,
+                    "user_id": payload.user_id,
+                    "conversation_id": payload.conversation_id,
+                    "limit": payload.limit_per_layer * 2,
+                },
+                memory_layer="working",
+                as_type="retriever",
+            ) as working_span:
+                selector: dict[str, Any] = {
+                    "agent_id": payload.agent_id,
+                    "user_id": payload.user_id,
+                    "memory_type": "working",
+                    "metadata.message_role": {"$in": ["user", "assistant", "external-source"]},
+                }
+                if payload.conversation_id:
+                    selector["conversation_id"] = payload.conversation_id
+                rows = (
+                    await store.memories.find(selector)
+                    .sort("created_at", DESCENDING)
+                    .limit(payload.limit_per_layer * 2)
+                    .to_list()
+                )
+                layers["working"] = [serialize(row) for row in reversed(rows)]
+                working_span.update(output=layers["working"])
         flattened = [
             item for memory_type in payload.memory_types for item in layers.get(memory_type, [])
         ]
@@ -210,7 +223,12 @@ async def _search_layer(
 
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}")
-@traced("memory.api.search_episodic", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.search_episodic",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="episodic",
+)
 async def search_episodic(
     agent_id: str,
     user_id: str,
@@ -222,13 +240,23 @@ async def search_episodic(
 
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}/{episode_id}")
-@traced("memory.api.get_episode", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.get_episode",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="episodic",
+)
 async def get_episode(agent_id: str, user_id: str, episode_id: str, _: Caller) -> dict[str, Any]:
     return await _get_scoped(agent_id, user_id, "episodic", episode_id)
 
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}")
-@traced("memory.api.search_semantic", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.search_semantic",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="semantic",
+)
 async def search_semantic(
     agent_id: str,
     user_id: str,
@@ -240,13 +268,23 @@ async def search_semantic(
 
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}/{semantic_id}")
-@traced("memory.api.get_semantic", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.get_semantic",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="semantic",
+)
 async def get_semantic(agent_id: str, user_id: str, semantic_id: str, _: Caller) -> dict[str, Any]:
     return await _get_scoped(agent_id, user_id, "semantic", semantic_id)
 
 
 @app.get("/api/v1/procedure/{agent_id}")
-@traced("memory.api.search_procedures", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.search_procedures",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="procedural",
+)
 async def search_procedures(
     agent_id: str,
     _: Caller,
@@ -258,7 +296,12 @@ async def search_procedures(
 
 
 @app.get("/api/v1/procedure/{agent_id}/{procedure_id}")
-@traced("memory.api.get_procedure", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.get_procedure",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="procedural",
+)
 async def get_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str, Any]:
     store.ensure_ready()
     try:
@@ -274,7 +317,12 @@ async def get_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str
 
 
 @app.post("/api/v1/working/turns", status_code=202)
-@traced("memory.api.store_conversation_turn", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.store_conversation_turn",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="working",
+)
 async def store_conversation_turn(payload: ConversationTurn, caller: Caller) -> dict[str, Any]:
     """Persist the current dialogue and queue it; no long-term memory is written here."""
     store.ensure_ready()
@@ -325,7 +373,12 @@ async def store_conversation_turn(payload: ConversationTurn, caller: Caller) -> 
 
 
 @app.post("/api/v1/working/candidates", status_code=202)
-@traced("memory.api.stage_candidate", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.stage_candidate",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="working",
+)
 async def stage_candidate(payload: WorkingCandidate, caller: Caller) -> dict[str, Any]:
     """Stage untrusted content in working memory for the next orchestrator collection."""
     store.ensure_ready()
@@ -378,7 +431,12 @@ async def stage_candidate(payload: WorkingCandidate, caller: Caller) -> dict[str
 
 
 @app.get("/api/v1/working/conversations/{agent_id}/{user_id}")
-@traced("memory.api.list_conversations", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.list_conversations",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="working",
+)
 async def list_conversations(
     agent_id: str,
     user_id: str,
@@ -425,7 +483,12 @@ async def list_conversations(
 
 
 @app.get("/api/v1/working/{agent_id}/{user_id}/{conversation_id}")
-@traced("memory.api.conversation_messages", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.conversation_messages",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="working",
+)
 async def conversation_messages(
     agent_id: str, user_id: str, conversation_id: str, _: Caller
 ) -> dict[str, Any]:
@@ -466,7 +529,12 @@ async def conversation_messages(
 
 
 @app.post("/api/v1/working/actions")
-@traced("memory.api.create_action", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.create_action",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="working",
+)
 async def create_action(payload: WorkingActionCreate, caller: Caller) -> dict[str, Any]:
     store.ensure_ready()
     now = datetime.now(UTC)
@@ -496,7 +564,9 @@ async def create_action(payload: WorkingActionCreate, caller: Caller) -> dict[st
 
 
 @app.get("/api/v1/working/actions/{action_id}")
-@traced("memory.api.get_action", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.get_action", system_boundary=True, agent_id="memory-service", memory_layer="working"
+)
 async def get_action(
     action_id: str,
     _: Caller,
@@ -507,7 +577,12 @@ async def get_action(
 
 
 @app.patch("/api/v1/working/actions/{action_id}")
-@traced("memory.api.patch_action", system_boundary=True, agent_id="memory-service")
+@traced(
+    "memory.api.patch_action",
+    system_boundary=True,
+    agent_id="memory-service",
+    memory_layer="working",
+)
 async def patch_action(action_id: str, payload: WorkingActionPatch, _: Caller) -> dict[str, Any]:
     store.ensure_ready()
     try:
@@ -618,6 +693,7 @@ async def skill_context(payload: SkillMemoryRequest, caller: Caller):
             agent_id="memory-service",
             system_boundary=True,
             metadata={"reader_agent": caller.authorized_party, "memory_mode": mode},
+            memory_layers=["episodic", "semantic", "procedural"],
         ) as span,
     ):
         result = await enrich_context(
@@ -657,6 +733,7 @@ async def skill_candidate(payload: SkillMemoryCandidate, caller: Caller):
             agent_id="memory-service",
             system_boundary=True,
             metadata=metadata,
+            memory_layer="working",
         ) as span,
     ):
         result = await stage_candidate(
@@ -675,6 +752,9 @@ async def skill_candidate(payload: SkillMemoryCandidate, caller: Caller):
 
 
 @app.post("/api/v1/skills/history")
+@traced(
+    "memory.skill.history", system_boundary=True, agent_id="memory-service", memory_layer="working"
+)
 async def skill_history(payload: SkillMemoryRequest, caller: Caller):
     skill_namespace(caller)
     return await conversation_messages(
@@ -686,6 +766,9 @@ async def skill_history(payload: SkillMemoryRequest, caller: Caller):
 
 
 @app.post("/api/v1/skills/turns", status_code=202)
+@traced(
+    "memory.skill.turn", system_boundary=True, agent_id="memory-service", memory_layer="working"
+)
 async def skill_turn(payload: SkillMemoryTurn, caller: Caller):
     skill_namespace(caller)
     store.ensure_ready()

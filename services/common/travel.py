@@ -8,7 +8,7 @@ import httpx
 
 from services.common.auth import ServiceTokenProvider
 from services.common.llm import raise_upstream_llm_error
-from services.common.tracing import observation, trace_headers, traced
+from services.common.tracing import observation, trace_headers
 
 
 class TravelA2AClient:
@@ -30,7 +30,6 @@ class TravelA2AClient:
             {"request_type": "lab_flight_source", "search": search}, conversation_id
         )
 
-    @traced("a2a.client.travel.send-message")
     async def _send(self, request: dict[str, Any], conversation_id: str) -> dict[str, Any]:
         token = await self.tokens.get()
         payload = {
@@ -41,7 +40,9 @@ class TravelA2AClient:
                 "contextId": conversation_id,
             }
         }
-        with observation("a2a.http", input=payload, metadata={"endpoint": self.base_url}) as span:
+        with observation(
+            "a2a.travel.call", input=payload, metadata={"endpoint": self.base_url}
+        ) as span:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     f"{self.base_url}/a2a/v1/message:send",

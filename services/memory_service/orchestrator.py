@@ -128,7 +128,15 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="LLM Memory Orchestrator", version="0.2.0", lifespan=lifespan)
 install_llm_error_handlers(app)
-install_experiment_middleware(app, accept_remote_parent=False)
+install_experiment_middleware(
+    app,
+    accept_remote_parent=False,
+    agent_routes={
+        ("POST", "/api/v1/orchestrator/collect"): "memory-orchestrator.request",
+        ("POST", "/api/v1/episodic/agent"): "memory-orchestrator.request",
+        ("POST", "/api/v1/semantic"): "memory-orchestrator.request",
+    },
+)
 Caller = Annotated[Principal, Depends(require_principal)]
 
 
@@ -146,7 +154,12 @@ async def health() -> dict[str, Any]:
 
 
 @app.get("/api/v1/episodic")
-@traced("memory.operator.search_all_episodes", system_boundary=True, agent_id="memory-orchestrator")
+@traced(
+    "memory.operator.search_all_episodes",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="episodic",
+)
 async def search_all_episodes(
     _: Caller,
     query: str = Query(min_length=1, max_length=4000),
@@ -157,7 +170,10 @@ async def search_all_episodes(
 
 @app.get("/api/v1/episodic/{agent_id}")
 @traced(
-    "memory.operator.search_agent_episodes", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.search_agent_episodes",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="episodic",
 )
 async def search_agent_episodes(
     agent_id: str,
@@ -170,7 +186,10 @@ async def search_agent_episodes(
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}")
 @traced(
-    "memory.operator.search_user_episodes", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.search_user_episodes",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="episodic",
 )
 async def search_user_episodes(
     agent_id: str,
@@ -184,7 +203,10 @@ async def search_user_episodes(
 
 @app.get("/api/v1/episodic/{agent_id}/{user_id}/{episode_id}")
 @traced(
-    "memory.operator.get_operator_episode", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.get_operator_episode",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="episodic",
 )
 async def get_operator_episode(
     agent_id: str, user_id: str, episode_id: str, _: Caller
@@ -194,7 +216,10 @@ async def get_operator_episode(
 
 @app.get("/api/v1/semantic")
 @traced(
-    "memory.operator.search_all_semantics", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.search_all_semantics",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="semantic",
 )
 async def search_all_semantics(
     _: Caller,
@@ -206,7 +231,10 @@ async def search_all_semantics(
 
 @app.get("/api/v1/semantic/{agent_id}")
 @traced(
-    "memory.operator.search_agent_semantics", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.search_agent_semantics",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="semantic",
 )
 async def search_agent_semantics(
     agent_id: str,
@@ -219,7 +247,10 @@ async def search_agent_semantics(
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}")
 @traced(
-    "memory.operator.search_user_semantics", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.search_user_semantics",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="semantic",
 )
 async def search_user_semantics(
     agent_id: str,
@@ -233,7 +264,10 @@ async def search_user_semantics(
 
 @app.get("/api/v1/semantic/{agent_id}/{user_id}/{semantic_id}")
 @traced(
-    "memory.operator.get_operator_semantic", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.get_operator_semantic",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="semantic",
 )
 async def get_operator_semantic(
     agent_id: str, user_id: str, semantic_id: str, _: Caller
@@ -246,6 +280,7 @@ async def get_operator_semantic(
     "memory.operator.search_operator_procedures",
     system_boundary=True,
     agent_id="memory-orchestrator",
+    memory_layer="procedural",
 )
 async def search_operator_procedures(
     agent_id: str,
@@ -258,7 +293,10 @@ async def search_operator_procedures(
 
 @app.get("/api/v1/procedure/{agent_id}/{procedure_id}")
 @traced(
-    "memory.operator.get_operator_procedure", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.get_operator_procedure",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="procedural",
 )
 async def get_operator_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str, Any]:
     return await _operator_get("procedural", procedure_id, agent_id=agent_id)
@@ -272,7 +310,10 @@ async def collect(request: CollectRequest, caller: Caller) -> dict[str, Any]:
 
 @app.post("/api/v1/episodic/direct")
 @traced(
-    "memory.operator.create_episodes_direct", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.create_episodes_direct",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="episodic",
 )
 async def create_episodes_direct(request: DirectEpisodeRequest, caller: Caller) -> dict[str, Any]:
     records = []
@@ -296,6 +337,7 @@ async def create_episodes_direct(request: DirectEpisodeRequest, caller: Caller) 
     "memory.operator.create_episodes_with_agent",
     system_boundary=True,
     agent_id="memory-orchestrator",
+    memory_layer="episodic",
 )
 async def create_episodes_with_agent(request: AgentMemoryRequest, caller: Caller) -> dict[str, Any]:
     decision = await _extract(
@@ -328,14 +370,22 @@ async def collect_thread(thread_id: str, caller: Caller) -> dict[str, Any]:
 
 
 @app.delete("/api/v1/episodic/{episode_id}")
-@traced("memory.operator.delete_episode", system_boundary=True, agent_id="memory-orchestrator")
+@traced(
+    "memory.operator.delete_episode",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="episodic",
+)
 async def delete_episode(episode_id: str, _: Caller) -> dict[str, Any]:
     return await _delete_by_id(episode_id, "episodic")
 
 
 @app.delete("/api/v1/episodic")
 @traced(
-    "memory.operator.delete_expired_episodes", system_boundary=True, agent_id="memory-orchestrator"
+    "memory.operator.delete_expired_episodes",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="episodic",
 )
 async def delete_expired_episodes(_: Caller) -> dict[str, Any]:
     store.ensure_ready()
@@ -353,6 +403,7 @@ async def delete_expired_episodes(_: Caller) -> dict[str, Any]:
     "memory.operator.create_semantic_from_episodes",
     system_boundary=True,
     agent_id="memory-orchestrator",
+    memory_layer="semantic",
 )
 async def create_semantic_from_episodes(
     request: SemanticFromEpisodesRequest, caller: Caller
@@ -393,7 +444,12 @@ async def create_semantic_from_episodes(
 
 
 @app.delete("/api/v1/semantic/{agent_id}/{user_id}/{semantic_id}")
-@traced("memory.operator.delete_semantic", system_boundary=True, agent_id="memory-orchestrator")
+@traced(
+    "memory.operator.delete_semantic",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="semantic",
+)
 async def delete_semantic(
     agent_id: str, user_id: str, semantic_id: str, _: Caller
 ) -> dict[str, Any]:
@@ -401,7 +457,12 @@ async def delete_semantic(
 
 
 @app.delete("/api/v1/semantic/{agent_id}/{user_id}")
-@traced("memory.operator.decay_semantic", system_boundary=True, agent_id="memory-orchestrator")
+@traced(
+    "memory.operator.decay_semantic",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="semantic",
+)
 async def decay_semantic(
     agent_id: str,
     user_id: str,
@@ -426,7 +487,12 @@ async def decay_semantic(
 
 
 @app.post("/api/v1/procedural/{agent_id}")
-@traced("memory.operator.create_procedure", system_boundary=True, agent_id="memory-orchestrator")
+@traced(
+    "memory.operator.create_procedure",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="procedural",
+)
 async def create_procedure(
     agent_id: str,
     request: ProcedureCreate,
@@ -445,7 +511,12 @@ async def create_procedure(
 
 
 @app.put("/api/v1/procedural/{agent_id}/{procedure_id}")
-@traced("memory.operator.update_procedure", system_boundary=True, agent_id="memory-orchestrator")
+@traced(
+    "memory.operator.update_procedure",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="procedural",
+)
 async def update_procedure(
     agent_id: str,
     procedure_id: str,
@@ -483,7 +554,12 @@ async def update_procedure(
 
 
 @app.delete("/api/v1/procedural/{agent_id}/{procedure_id}")
-@traced("memory.operator.delete_procedure", system_boundary=True, agent_id="memory-orchestrator")
+@traced(
+    "memory.operator.delete_procedure",
+    system_boundary=True,
+    agent_id="memory-orchestrator",
+    memory_layer="procedural",
+)
 async def delete_procedure(agent_id: str, procedure_id: str, _: Caller) -> dict[str, Any]:
     return await _delete_by_id(procedure_id, "procedural", {"agent_id": agent_id})
 
@@ -606,6 +682,7 @@ async def _collect_jobs(request: CollectRequest, *, trigger: str) -> dict[str, A
                         "client_agent_id": job["agent_id"],
                         **job.get("source_metadata", {}),
                     },
+                    memory_layers=["working", "episodic", "semantic", "procedural"],
                 ) as job_span:
                     decision = await _extract(job)
                     promoted = await _persist_promotions(
@@ -744,7 +821,7 @@ async def _insert_memory(
     )
 
 
-@traced("memory.mark-job-completed")
+@traced("memory.mark-job-completed", memory_layer="working")
 async def _mark_job_completed(
     job: dict[str, Any], decision: MigrationDecision, promoted_count: int
 ) -> None:

@@ -14,7 +14,14 @@ class SkillMemoryClient:
 
     async def request(self, operation, payload, subject_token):
         token = await self.exchange.exchange(subject_token)
-        with observation("skill.memory", input={"operation": operation, **payload}) as span:
+        layers = ["episodic", "semantic", "procedural"] if operation == "context" else None
+        layer = "working" if operation in {"candidates", "history", "turns"} else None
+        with observation(
+            f"memory.skill.http.{operation}",
+            input={"operation": operation, **payload},
+            memory_layer=layer,
+            memory_layers=layers,
+        ) as span:
             async with httpx.AsyncClient(timeout=60) as client:
                 response = await client.post(
                     f"{self.url}/api/v1/skills/{operation}",

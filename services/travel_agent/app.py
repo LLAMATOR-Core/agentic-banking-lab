@@ -102,7 +102,9 @@ class A2AMockBookingRequest(BaseModel):
 
 
 app = FastAPI(title="Partner Travel Agent", version="0.1.0")
-install_experiment_middleware(app)
+install_experiment_middleware(
+    app, agent_routes={("POST", "/a2a/v1/message:send"): "travel-agent.request"}
+)
 install_llm_error_handlers(app)
 
 
@@ -219,7 +221,6 @@ async def create_mock_booking(payload: MockBookingRequest, caller: Caller) -> di
 
 
 @app.post("/a2a/v1/message:send")
-@traced("travel.api.send_message", system_boundary=True, agent_id="travel-agent")
 async def send_message(
     payload: dict[str, Any],
     caller: Caller,

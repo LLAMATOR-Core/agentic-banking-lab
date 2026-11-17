@@ -49,7 +49,7 @@ def create_mcp_app(
 ) -> FastAPI:
     """Create a stateless MCP Streamable HTTP server for the core tool methods."""
     app = FastAPI(title=f"{server_name} MCP", version="0.1.0")
-    install_experiment_middleware(app)
+    install_experiment_middleware(app, trace_mcp_calls=True)
     registry = {tool.name: tool for tool in tools}
 
     @app.get("/health")
@@ -169,7 +169,6 @@ class MCPClient:
         self.initialized = False
         self._init_lock = asyncio.Lock()
 
-    @traced("mcp.client.list-tools", as_type="tool")
     async def list_tools(self, bearer_token: str | None = None) -> list[dict[str, Any]]:
         await self._initialize(bearer_token)
         result = await self._request("tools/list", {}, bearer_token)
@@ -197,7 +196,6 @@ class MCPClient:
         except json.JSONDecodeError:
             return {"text": text}
 
-    @traced("mcp.client.rpc")
     async def _request(
         self, method: str, params: dict[str, Any], bearer_token: str | None
     ) -> dict[str, Any]:
@@ -251,20 +249,9 @@ class MCPClient:
             headers["Authorization"] = f"Bearer {bearer_token}"
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
-        with observation("mcp.http", input=payload, metadata={"endpoint": self.endpoint}) as span:
-            headers.update(trace_headers())
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(self.endpoint, json=payload, headers=headers)
-            try:
-                output = self._decode_response(response)
-            except (ValueError, KeyError):
-                output = response.text
-            span.update(
-                output=output,
-                metadata={"http_status": response.status_code},
-                **({"level": "ERROR"} if response.is_error else {}),
-            )
-            return response
+        headers.update(trace_headers())
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await client.post(self.endpoint, json=payload, headers=headers)
 
     @staticmethod
     def _decode_response(response: httpx.Response) -> dict[str, Any]:

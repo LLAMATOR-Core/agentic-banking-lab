@@ -85,25 +85,25 @@ docker compose --env-file .env logs --tail=100 seaweedfs langfuse-web langfuse-w
 текущего диалога. Список вызовов находится в `data.orchestration.delegated_agents`,
 отдельные результаты в `data.agent_results`.
 
-Для одного запроса откройте банковскую трассу в `Banking`. В проектах партнёра
-и памяти найдите локальные трассы по `upstream_trace_id`, равному банковскому trace ID.
+Для одного запроса откройте `banking-agent.request` в `Banking`. В проекте партнёра
+найдите локальную трассу по `upstream_trace_id`, равному банковскому trace ID.
 Сверьте `oauth.token-exchange`, `oauth.authorize`, `oauth.scope-check`,
-`oauth.resource-check`, а для памяти сверьте ID кандидата, задания, `derived_from_job`
-и ID извлечённой записи. Фоновый перенос памяти ищите отдельно по `experiment_id`/`run_id` и job ID.
+`oauth.resource-check`, а для памяти — `memory.client.call` и
+`memory.skill.http.<operation>`. Фоновый перенос ищите в `Persistent Memory`
+отдельно по `experiment_id`/`run_id`, job ID и `derived_from_job`.
 
 Проверка доставки и локальных деревьев Langfuse v4:
 
 ```bash
 docker compose exec -T banking-agent python < scripts/trace_smoke.py
 docker compose exec -T travel-agent python - --upstream-trace-id BANK_TRACE_ID < scripts/trace_smoke.py
-docker compose exec -T memory-service python - --upstream-trace-id BANK_TRACE_ID < scripts/trace_smoke.py
 ```
 
-Во второй и третьей командах замените `BANK_TRACE_ID` на `trace_id` первого отчёта.
+Во второй команде замените `BANK_TRACE_ID` на `trace_id` первого отчёта.
 Каждый запуск читает только собственный проект с ключами своего контейнера.
-Скрипт проверяет физический и логический корень каждого HTTP-запроса, наличие
-родителей и принадлежность наблюдений системе. Память может принять несколько
-HTTP-вызовов одного банковского запроса; каждый имеет свою локальную трассу.
+Скрипт проверяет физический и логический корень агентского запроса, наличие
+родителей и принадлежность наблюдений системе. Синхронные вызовы памяти
+показаны внутри банковской трассы и не создают корни в проекте памяти.
 Токены и банковское содержимое не печатаются.
 
 Следующие признаки относятся к `BANKING_AGENT_MODE=legacy`.
