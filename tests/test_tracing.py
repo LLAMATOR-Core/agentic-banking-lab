@@ -72,7 +72,36 @@ def test_trace_identity_is_propagated_to_langfuse_v4(monkeypatch) -> None:
     ]
 
 
-def test_system_boundary_starts_a_new_root_and_restores_caller_context(monkeypatch):
+def test_memory_layers_are_filterable_and_specific_to_each_observation(monkeypatch) -> None:
+    client = FakeClient()
+    propagated: list[dict[str, Any]] = []
+
+    @contextmanager
+    def fake_propagate_attributes(**kwargs: Any):
+        propagated.append(kwargs)
+        yield
+
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setattr(tracing, "get_client", lambda: client)
+    monkeypatch.setattr(tracing, "propagate_attributes", fake_propagate_attributes)
+
+    with tracing.observation(
+        "memory.context", memory_layers=["working", "episodic", "semantic", "procedural"]
+    ):
+        for layer in ("working", "episodic", "semantic", "procedural"):
+            with tracing.observation("memory.store.search", memory_layer=layer):
+                pass
+
+    assert client.started[0]["metadata"]["memory_layers"] == [
+        "working", "episodic", "semantic", "procedural"
+    ]
+    assert "memory_layer" not in client.started[0]["metadata"]
+    for index, layer in enumerate(("working", "episodic", "semantic", "procedural"), 1):
+        assert client.started[index]["metadata"]["memory_layer"] == layer
+        assert f"memory:{layer}" in propagated[index]["tags"]
+
+
+def test_system_boundary_preserves_incoming_parent_and_context(monkeypatch):
     from opentelemetry.context import attach, detach
     from opentelemetry.trace import (
         NonRecordingSpan,
@@ -107,6 +136,22 @@ def test_system_boundary_starts_a_new_root_and_restores_caller_context(monkeypat
         assert get_current_span().get_span_context().trace_id == 123
     finally:
         detach(token)
-    assert seen_parents == [0]
+    assert seen_parents == [123]
     assert client.started[0]["metadata"]["system_id"] == "travel"
     assert client.started[0]["metadata"]["correlation_id"] == "shared-correlation"
+
+
+def test_experiment_labels_cross_http_and_are_restored_between_runs(monkeypatch):
+    client = FakeClient()
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setattr(tracing, "get_client", lambda: client)
+    monkeypatch.setattr(tracing, "propagate_attributes", lambda **kwargs: nullcontext())
+    with tracing.experiment_context({"experiment_id": "least-privilege", "run_id": "run-001"}):
+        headers = tracing.trace_headers()
+        with tracing.observation("delayed-promotion", system_boundary=True):
+            pass
+    with tracing.observation("next-run"):
+        pass
+    assert headers["x-run-id"] == "run-001"
+    assert client.started[0]["metadata"]["run_id"] == "run-001"
+    assert "run_id" not in (client.started[1].get("metadata") or {})

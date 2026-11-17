@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.abs_service.db import SessionLocal, init_database
@@ -19,7 +21,9 @@ from services.abs_service.models import (
     Position,
 )
 from services.abs_service.seed import seed_database
-from services.common.auth import Principal, require_principal
+from services.common.auth import Principal, require_principal, require_scope
+from services.common.banking_policy import RESOURCE_SCOPES
+from services.common.tracing import install_experiment_middleware, observation
 
 
 @asynccontextmanager
@@ -30,6 +34,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Automated Banking System", version="0.1.0", lifespan=lifespan)
+install_experiment_middleware(app)
 
 
 async def get_session():
@@ -43,6 +48,7 @@ Caller = Annotated[Principal, Depends(require_principal)]
 
 def scoped_customer(
     caller: Caller,
+    request: Request,
     x_lab_customer_id: str | None = Header(default=None, alias="X-Lab-Customer-ID"),
 ) -> str:
     """Resolve identity differently only to make the lab contrast explicit.
@@ -51,9 +57,30 @@ def scoped_customer(
     vulnerable MCP authenticates as a privileged service and supplies a header
     copied from the LLM-controlled MCP argument.
     """
-    if caller.authorized_party in {"bank-mcp", "debug"}:
+    if caller.authorized_party == "bank-mcp":
+        scope = RESOURCE_SCOPES.get((request.method, request.url.path))
+        with observation(
+            "oauth.resource-check",
+            user_id=caller.customer_id,
+            input={
+                "azp": caller.authorized_party,
+                "resource": request.url.path,
+                "method": request.method,
+                "required_scope": scope,
+            },
+        ) as span:
+            if scope is None:
+                raise HTTPException(403, "Unknown ABS resource")
+            try:
+                require_scope(caller, scope)
+            except HTTPException:
+                span.update(output={"allowed": False})
+                raise
+            span.update(output={"allowed": bool(caller.customer_id)})
         if not caller.customer_id:
             raise HTTPException(403, "Exchanged token has no customer_id claim")
+        return caller.customer_id
+    if caller.authorized_party == "debug":
         return caller.customer_id
     if caller.authorized_party == "bank-mcp-vulnerable":
         if not x_lab_customer_id or len(x_lab_customer_id) > 64:
@@ -137,22 +164,95 @@ async def operations(
     if account_id:
         query = query.where(Operation.account_id == account_id)
     rows = (await session.scalars(query.order_by(Operation.created_at.desc()).limit(limit))).all()
-    return [
-        {
-            "id": row.id,
-            "account_id": row.account_id,
-            "amount": str(row.amount),
-            "currency": row.currency,
-            "direction": row.direction,
-            "category": row.category,
-            "counterparty": row.counterparty,
-            "card_mask": row.card_mask,
-            "description": row.description,
-            "status": row.status,
-            "created_at": row.created_at.isoformat(),
-        }
-        for row in rows
-    ]
+    return [_operation_dict(row) for row in rows]
+
+
+@app.get("/internal/statement")
+async def account_statement(
+    session: Session,
+    customer_id: CustomerId,
+    _: Caller,
+    account_id: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = Query(default=1000, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(400, "date_from must not exceed date_to")
+    owned = select(Account).where(Account.customer_id == customer_id)
+    if account_id:
+        owned = owned.where(Account.id == account_id)
+    account_rows = (await session.scalars(owned.order_by(Account.id))).all()
+    if account_id and not account_rows:
+        raise HTTPException(404, "Account not found")
+    filters = [Operation.account_id.in_([row.id for row in account_rows])]
+    tz = ZoneInfo("Europe/Moscow")
+    if date_from:
+        filters.append(
+            Operation.created_at >= datetime.combine(date_from, time(), tz).astimezone(UTC)
+        )
+    if date_to:
+        # Inclusive local dates, exclusive upper timestamp; safe for subsecond entries.
+        filters.append(
+            Operation.created_at
+            < (datetime.combine(date_to, time(), tz).astimezone(UTC) + timedelta(days=1))
+        )
+    total = await session.scalar(select(func.count()).select_from(Operation).where(*filters))
+    rows = (
+        await session.scalars(
+            select(Operation)
+            .where(*filters)
+            .order_by(Operation.created_at, Operation.id)
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+    amounts = (
+        await session.execute(
+            select(Operation.currency, Operation.direction, func.sum(Operation.amount))
+            .where(*filters, Operation.status == "completed")
+            .group_by(Operation.currency, Operation.direction)
+            .order_by(Operation.currency, Operation.direction)
+        )
+    ).all()
+    totals = {}
+    for currency, direction, amount in amounts:
+        values = totals.setdefault(
+            currency, {"incoming": Decimal("0.00"), "outgoing": Decimal("0.00")}
+        )
+        values[direction] = amount
+    return {
+        "date_from": date_from.isoformat() if date_from else None,
+        "date_to": date_to.isoformat() if date_to else None,
+        "timezone": "Europe/Moscow",
+        "accounts_current": [_account_dict(row) for row in account_rows],
+        "operations": [_operation_dict(row) for row in rows],
+        "total_operations": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(rows) < total,
+        "totals_completed_by_currency": {
+            currency: {key: str(value) for key, value in values.items()}
+            for currency, values in totals.items()
+        },
+    }
+
+
+def _operation_dict(row: Operation) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "account_id": row.account_id,
+        "amount": str(row.amount),
+        "currency": row.currency,
+        "direction": row.direction,
+        "category": row.category,
+        "counterparty": row.counterparty,
+        "card_mask": row.card_mask,
+        "description": row.description,
+        "status": row.status,
+        "created_at": row.created_at.isoformat(),
+    }
 
 
 @app.get("/internal/investments/products")

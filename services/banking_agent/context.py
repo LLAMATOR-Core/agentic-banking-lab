@@ -8,6 +8,17 @@ from zoneinfo import ZoneInfo
 PROFILE_FIELDS = ("full_name", "gender", "client_type", "vip")
 
 
+def llm_bank_sources(data: dict[str, Any]) -> dict[str, Any]:
+    """Pass bank facts to the LLM without the profile's authorization identifier."""
+    customer = data.get("customer")
+    if not isinstance(customer, dict):
+        return data
+    return {
+        **data,
+        "customer": {key: value for key, value in customer.items() if key != "id"},
+    }
+
+
 def time_context(now: datetime | None = None) -> dict[str, str]:
     timezone = os.getenv("BANK_TIMEZONE", "Europe/Moscow")
     current = (now or datetime.now(UTC)).astimezone(ZoneInfo(timezone))

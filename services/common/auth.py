@@ -12,6 +12,8 @@ import jwt
 from fastapi import Header, HTTPException, status
 from jwt.algorithms import RSAAlgorithm
 
+from services.common.tracing import observation
+
 
 @dataclass(frozen=True, slots=True)
 class Principal:
@@ -103,13 +105,26 @@ async def require_principal(
 
     azp = str(claims.get("azp", ""))
     allowed = {value.strip() for value in os.getenv("ALLOWED_AZP", "").split(",") if value.strip()}
-    if allowed and azp not in allowed:
-        raise HTTPException(status_code=403, detail="Calling client is not allowed")
     expected_audiences = {
         value.strip() for value in os.getenv("EXPECTED_AUDIENCE", "").split(",") if value.strip()
     }
     raw_audience = claims.get("aud", [])
     token_audiences = {raw_audience} if isinstance(raw_audience, str) else set(raw_audience)
+    client_allowed = not allowed or azp in allowed
+    audience_allowed = not expected_audiences or bool(expected_audiences & token_audiences)
+    with observation(
+        "oauth.authorize",
+        user_id=claims.get("customer_id"),
+        input={
+            "azp": azp,
+            "aud": raw_audience,
+            "scope": claims.get("scope"),
+            "expected_audience": sorted(expected_audiences),
+        },
+    ) as span:
+        span.update(output={"client_allowed": client_allowed, "audience_allowed": audience_allowed})
+    if not client_allowed:
+        raise HTTPException(status_code=403, detail="Calling client is not allowed")
     if expected_audiences and not expected_audiences.intersection(token_audiences):
         raise HTTPException(status_code=403, detail="Token audience is not valid for this service")
 
@@ -126,7 +141,13 @@ async def require_principal(
 class ServiceTokenProvider:
     """Caches a Keycloak client-credentials token until shortly before expiry."""
 
-    def __init__(self, client_id: str | None = None, client_secret: str | None = None) -> None:
+    def __init__(
+        self,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        scope: str | None = None,
+    ) -> None:
+        self.scope = scope
         self.client_id = client_id or os.environ["SERVICE_CLIENT_ID"]
         self.client_secret = client_secret or os.environ["SERVICE_CLIENT_SECRET"]
         base = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
@@ -146,6 +167,7 @@ class ServiceTokenProvider:
                     self.token_url,
                     data={
                         "grant_type": "client_credentials",
+                        **({"scope": self.scope} if self.scope else {}),
                         "client_id": self.client_id,
                         "client_secret": self.client_secret,
                     },
@@ -170,33 +192,72 @@ class TokenExchangeProvider:
         client_id: str | None = None,
         client_secret: str | None = None,
         audience: str = "abs-api",
+        scope: str | None = None,
     ) -> None:
         self.client_id = client_id or os.environ["SERVICE_CLIENT_ID"]
         self.client_secret = client_secret or os.environ["SERVICE_CLIENT_SECRET"]
         self.audience = audience
+        self.scope = scope
         base = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
         self.token_url = f"{base}/realms/agentic-banking/protocol/openid-connect/token"
 
-    async def exchange(self, subject_token: str) -> str:
+    async def exchange(self, subject_token: str, *, scope: str | None = None) -> str:
+        requested_scope = self.scope if scope is None else scope
         if not subject_token:
             raise ValueError("The authenticated end-user token is required for token exchange")
-        async with httpx.AsyncClient(timeout=8) as client:
-            response = await client.post(
-                self.token_url,
-                data={
-                    "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "subject_token": subject_token,
-                    "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-                    "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
-                    "audience": self.audience,
-                },
+        with observation(
+            "oauth.token-exchange",
+            input={
+                "client_id": self.client_id,
+                "audience": self.audience,
+                "scope": requested_scope,
+            },
+        ) as span:
+            async with httpx.AsyncClient(timeout=8) as client:
+                response = await client.post(
+                    self.token_url,
+                    data={
+                        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                        "subject_token": subject_token,
+                        "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                        "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                        "audience": self.audience,
+                        **({"scope": requested_scope} if requested_scope else {}),
+                    },
+                )
+            body = response.json()
+            granted = not response.is_error and (
+                not requested_scope
+                or set(requested_scope.split()) <= set(body.get("scope", "").split())
             )
-        if response.is_error:
-            try:
-                detail = response.json().get("error_description", response.text)
-            except ValueError:
-                detail = response.text
-            raise ValueError(f"Keycloak token exchange failed: {detail}")
-        return str(response.json()["access_token"])
+            span.update(
+                output={
+                    "http_status": response.status_code,
+                    "scope": body.get("scope"),
+                    "expires_in": body.get("expires_in"),
+                    "granted": granted,
+                }
+            )
+            if not granted:
+                raise ValueError("Keycloak token exchange rejected the requested authority")
+            return str(body["access_token"])
+
+
+def require_scope(principal: Principal, scope: str) -> None:
+    """Only signed claims supplied by require_principal are authorization evidence."""
+    granted = scope in str(principal.claims.get("scope", "")).split()
+    with observation(
+        "oauth.scope-check",
+        input={
+            "required_scope": scope,
+            "azp": principal.authorized_party,
+            "aud": principal.claims.get("aud"),
+            "scope": principal.claims.get("scope"),
+        },
+        user_id=principal.customer_id,
+    ) as span:
+        span.update(output={"allowed": granted})
+    if not granted:
+        raise HTTPException(403, f"Required scope: {scope}")

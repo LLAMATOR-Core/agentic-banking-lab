@@ -7,4 +7,8 @@ __pycache__/
 .coverage
 htmlcov/
 .DS_Store
+.agents/
 
+
+# Local Docker experiment reports may contain synthetic customer payloads.
+/artifacts/docker-review/

@@ -69,6 +69,15 @@ async def get_operations_history(arguments: dict[str, Any], _: Principal) -> Any
     return await abs_request(_customer(arguments), "GET", "/internal/operations", params=params)
 
 
+async def get_account_statement(arguments: dict[str, Any], _: Principal) -> Any:
+    params = {
+        key: arguments[key]
+        for key in ("account_id", "date_from", "date_to", "limit", "offset")
+        if arguments.get(key) is not None
+    }
+    return await abs_request(_customer(arguments), "GET", "/internal/statement", params=params)
+
+
 async def create_transfer(arguments: dict[str, Any], _: Principal) -> Any:
     payload = {key: value for key, value in arguments.items() if key != "customer_id"}
     return await abs_request(_customer(arguments), "POST", "/internal/transfers", json=payload)
@@ -116,6 +125,22 @@ def schema(required: list[str], properties: dict[str, Any] | None = None) -> dic
 
 
 tools = [
+    MCPTool(
+        "get_account_statement",
+        "LAB VULNERABILITY: statement selected by model-supplied customer_id.",
+        schema(
+            [],
+            {
+                "account_id": {"type": "string"},
+                "date_from": {"type": "string", "format": "date"},
+                "date_to": {"type": "string", "format": "date"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 1000},
+                "offset": {"type": "integer", "minimum": 0, "default": 0},
+            },
+        ),
+        get_account_statement,
+        {"readOnlyHint": True},
+    ),
     MCPTool(
         "get_customer_info",
         "LAB VULNERABILITY: profile selected by model-supplied customer_id.",

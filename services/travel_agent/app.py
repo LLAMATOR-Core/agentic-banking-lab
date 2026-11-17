@@ -9,23 +9,32 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from services.common.auth import Principal, require_principal
+from services.common.auth import Principal, require_principal, require_scope
 from services.common.llm import install_llm_error_handlers
 from services.common.schemas import MockFlightSearch
-from services.common.tracing import observation, public_trace_config, traced
+from services.common.tracing import (
+    install_experiment_middleware,
+    observation,
+    public_trace_config,
+    traced,
+)
 from services.travel_agent.graph import travel_graph
 
 
 class TripRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_id: str = Field(min_length=1, max_length=128)
-    request_type: Literal["destination_info", "trip_search"] = "trip_search"
+    request_type: Literal["destination_info", "trip_search", "budget_plan"] = "trip_search"
     user_query: str = Field(default="", max_length=1000)
     origin: str | None = Field(default=None, min_length=3, max_length=3)
     destination: str = Field(min_length=2, max_length=120)
     destination_airport: str | None = Field(default=None, min_length=3, max_length=3)
     departure_date: date | None = None
     return_date: date | None = None
+    stay_end_date: date | None = None
+    one_way: bool = False
+    travel_period: str | None = Field(default=None, max_length=120)
+    duration_days: int | None = Field(default=None, ge=1, le=365)
     adults: int = Field(default=1, ge=1, le=9)
     budget: float | None = Field(default=None, gt=0)
     currency: str = Field(default="RUB", min_length=3, max_length=3)
@@ -35,18 +44,35 @@ class TripRequest(BaseModel):
     def validate_dates(self):
         if self.request_type == "destination_info":
             return self
+        if self.one_way and self.return_date:
+            raise ValueError("one_way cannot include a return flight")
+        if self.request_type == "budget_plan":
+            if self.departure_date and self.departure_date < date.today():
+                raise ValueError("departure_date cannot be in the past")
+            if (
+                self.departure_date
+                and self.stay_end_date
+                and self.stay_end_date <= self.departure_date
+            ):
+                raise ValueError("stay_end_date must be after departure_date")
+            if self.return_date and (
+                not self.departure_date or self.return_date <= self.departure_date
+            ):
+                raise ValueError("return_date must be after departure_date")
+            return self
         required = {
             "origin": self.origin,
             "destination_airport": self.destination_airport,
             "departure_date": self.departure_date,
-            "return_date": self.return_date,
         }
+        if not self.one_way:
+            required["return_date"] = self.return_date
         missing = [key for key, value in required.items() if value is None]
         if missing:
             raise ValueError(f"trip_search requires: {', '.join(missing)}")
         if self.departure_date < date.today():
             raise ValueError("departure_date cannot be in the past")
-        if self.return_date <= self.departure_date:
+        if self.return_date and self.return_date <= self.departure_date:
             raise ValueError("return_date must be after departure_date")
         return self
 
@@ -76,8 +102,19 @@ class A2AMockBookingRequest(BaseModel):
 
 
 app = FastAPI(title="Partner Travel Agent", version="0.1.0")
+install_experiment_middleware(
+    app, agent_routes={("POST", "/a2a/v1/message:send"): "travel-agent.request"}
+)
 install_llm_error_handlers(app)
-Caller = Annotated[Principal, Depends(require_principal)]
+
+
+async def travel_caller(principal: Principal = Depends(require_principal)):
+    if principal.authorized_party == "travel-skill":
+        require_scope(principal, "travel.plan")
+    return principal
+
+
+Caller = Annotated[Principal, Depends(travel_caller)]
 
 
 @app.get("/health")
@@ -98,7 +135,7 @@ async def agent_card() -> dict[str, Any]:
         "name": "Bank Partner Travel Agent",
         "description": (
             "LLM agent combining Tutu or mock flight searches, local mock booking, "
-            "and recommendations."
+            "web search for destination information and travel costs, and recommendations."
         ),
         "supportedInterfaces": [
             {
@@ -140,7 +177,8 @@ async def agent_card() -> dict[str, Any]:
                 "id": "plan-trip",
                 "name": "Plan a trip",
                 "description": (
-                    "Combines Tutu flights with destination recommendations; lab mock optional."
+                    "Combines Tutu flights with web search for destinations, travel costs and "
+                    "activities, returning source links; lab mock optional."
                 ),
                 "tags": ["travel", "flights", "destinations"],
                 "inputModes": ["application/json"],
@@ -183,7 +221,6 @@ async def create_mock_booking(payload: MockBookingRequest, caller: Caller) -> di
 
 
 @app.post("/a2a/v1/message:send")
-@traced("travel.api.send_message", system_boundary=True, agent_id="travel-agent")
 async def send_message(
     payload: dict[str, Any],
     caller: Caller,

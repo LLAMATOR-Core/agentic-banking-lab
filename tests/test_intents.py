@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -20,6 +21,7 @@ class FakeLLM:
 def graph_with(fake: FakeLLM) -> BankingGraph:
     graph = object.__new__(BankingGraph)
     graph.llm = fake
+    graph.skills = SimpleNamespace(abs_mcp_mode="secure")
     return graph
 
 

@@ -5,6 +5,7 @@ x-python-service: &python-service
     context: .
     dockerfile: Dockerfile
   restart: unless-stopped
+  dns: ["${DOCKER_DNS_SERVER:-1.1.1.1}"]
   environment: &python-env
     AUTH_DISABLED: ${AUTH_DISABLED:-false}
     KEYCLOAK_ISSUER: http://localhost:8080/realms/agentic-banking
@@ -94,6 +95,9 @@ services:
       KEYCLOAK_BANK_MCP_VULNERABLE_SECRET: ${KEYCLOAK_BANK_MCP_VULNERABLE_SECRET:-bank-mcp-vulnerable-secret}
       KEYCLOAK_TRAVEL_AGENT_SECRET: ${KEYCLOAK_TRAVEL_AGENT_SECRET:-travel-agent-secret}
       KEYCLOAK_MEMORY_OPERATOR_SECRET: ${KEYCLOAK_MEMORY_OPERATOR_SECRET:-memory-operator-secret}
+      KEYCLOAK_OPERATIONS_SKILL_SECRET: ${KEYCLOAK_OPERATIONS_SKILL_SECRET:-operations-skill-secret}
+      KEYCLOAK_INVESTMENT_SKILL_SECRET: ${KEYCLOAK_INVESTMENT_SKILL_SECRET:-investment-skill-secret}
+      KEYCLOAK_TRAVEL_SKILL_SECRET: ${KEYCLOAK_TRAVEL_SKILL_SECRET:-travel-skill-secret}
     ports: ["127.0.0.1:8080:8080"]
     volumes:
       - ./infra/keycloak/agentic-banking-realm.json:/opt/keycloak/data/import/agentic-banking-realm.json:ro
@@ -116,6 +120,9 @@ services:
       KEYCLOAK_BANK_MCP_SECRET: ${KEYCLOAK_BANK_MCP_SECRET:-bank-mcp-secret}
       KEYCLOAK_BANK_MCP_VULNERABLE_SECRET: ${KEYCLOAK_BANK_MCP_VULNERABLE_SECRET:-bank-mcp-vulnerable-secret}
       KEYCLOAK_MEMORY_OPERATOR_SECRET: ${KEYCLOAK_MEMORY_OPERATOR_SECRET:-memory-operator-secret}
+      KEYCLOAK_OPERATIONS_SKILL_SECRET: ${KEYCLOAK_OPERATIONS_SKILL_SECRET:-operations-skill-secret}
+      KEYCLOAK_INVESTMENT_SKILL_SECRET: ${KEYCLOAK_INVESTMENT_SKILL_SECRET:-investment-skill-secret}
+      KEYCLOAK_TRAVEL_SKILL_SECRET: ${KEYCLOAK_TRAVEL_SKILL_SECRET:-travel-skill-secret}
     depends_on:
       keycloak: {condition: service_started}
 
@@ -150,8 +157,9 @@ services:
       PORT: 8002
       MONGODB_URL: mongodb://root:${MONGO_ROOT_PASSWORD:-mongo}@mongo:27017/?authSource=admin
       MONGODB_DATABASE: agent_memory
-      ALLOWED_AZP: banking-agent
+      ALLOWED_AZP: banking-agent,operations-skill,investment-skill,travel-skill
       EXPECTED_AUDIENCE: memory-service
+      SKILL_MEMORY_MODE: ${SKILL_MEMORY_MODE:-shared}
       OPENAI_API_KEY: ${MEMORY_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
       OPENAI_BASE_URL: ${MEMORY_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.openai.com/v1}}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
@@ -203,8 +211,8 @@ services:
     environment:
       <<: *banking-env
       PORT: 8101
-      ALLOWED_AZP: bank-ui
-      EXPECTED_AUDIENCE: abs-mcp
+      ALLOWED_AZP: bank-ui,operations-skill,investment-skill
+      EXPECTED_AUDIENCE: abs-mcp,bank-mcp
       ABS_API_URL: http://abs-api:8001
       SERVICE_CLIENT_ID: bank-mcp
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_BANK_MCP_SECRET:-bank-mcp-secret}
@@ -243,8 +251,9 @@ services:
     environment:
       <<: *banking-env
       PORT: 8105
-      ALLOWED_AZP: banking-agent
+      ALLOWED_AZP: banking-agent,investment-skill
       EXPECTED_AUDIENCE: duckduckgo-mcp
+      DDGS_TEXT_BACKEND: ${DDGS_TEXT_BACKEND:-bing}
     ports: ["127.0.0.1:8105:8105"]
     depends_on:
       langfuse-web: {condition: service_healthy}
@@ -281,7 +290,7 @@ services:
     environment:
       <<: *travel-env
       PORT: 8003
-      ALLOWED_AZP: banking-agent
+      ALLOWED_AZP: banking-agent,travel-skill
       EXPECTED_AUDIENCE: travel-agent
       DUCKDUCKGO_MCP_URL: http://travel-duckduckgo-mcp:8105/mcp
       FLIGHTS_PROVIDER: ${FLIGHTS_PROVIDER:-tutu}
@@ -316,6 +325,7 @@ services:
     environment:
       <<: *banking-env
       PORT: 8000
+      BANKING_AGENT_MODE: ${BANKING_AGENT_MODE:-orchestrator}
       ALLOWED_AZP: bank-ui
       EXPECTED_AUDIENCE: banking-agent
       ABS_MCP_URL: ${ABS_MCP_URL:-http://abs-mcp:8101/mcp}
@@ -324,6 +334,9 @@ services:
       DUCKDUCKGO_MCP_URL: http://duckduckgo-mcp:8105/mcp
       MEMORY_URL: ${MEMORY_URL:-http://memory-api:8002}
       TRAVEL_AGENT_URL: ${TRAVEL_AGENT_URL:-http://travel-api:8003}
+      KEYCLOAK_OPERATIONS_SKILL_SECRET: ${KEYCLOAK_OPERATIONS_SKILL_SECRET:-operations-skill-secret}
+      KEYCLOAK_INVESTMENT_SKILL_SECRET: ${KEYCLOAK_INVESTMENT_SKILL_SECRET:-investment-skill-secret}
+      KEYCLOAK_TRAVEL_SKILL_SECRET: ${KEYCLOAK_TRAVEL_SKILL_SECRET:-travel-skill-secret}
       SERVICE_CLIENT_ID: banking-agent
       SERVICE_CLIENT_SECRET: ${KEYCLOAK_BANKING_AGENT_SECRET:-banking-agent-secret}
       OPENAI_API_KEY: ${BANKING_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
@@ -336,6 +349,7 @@ services:
       BANK_TIMEZONE: ${BANK_TIMEZONE:-Europe/Moscow}
     ports: ["127.0.0.1:8000:8000"]
     depends_on:
+      keycloak-configurator: {condition: service_completed_successfully}
       abs-mcp: {condition: service_started}
       abs-mcp-vulnerable: {condition: service_started}
       duckduckgo-mcp: {condition: service_started}
@@ -494,6 +508,7 @@ services:
       ALLOWED_AZP: travel-agent
       EXPECTED_AUDIENCE: travel-duckduckgo-mcp
       MCP_SERVER_NAME: travel-duckduckgo-mcp
+      DDGS_TEXT_BACKEND: ${DDGS_TEXT_BACKEND:-bing}
     depends_on:
       langfuse-travel: {condition: service_healthy}
       keycloak-configurator: {condition: service_completed_successfully}

@@ -160,7 +160,9 @@ class MemoryStore:
             "embedding": {"$type": "array"},
             "$or": [{"expires_at": None}, {"expires_at": {"$gt": datetime.now(UTC)}}],
         }
-        if memory_type == "procedural":
+        if agent_id.startswith("skills."):
+            selector["user_id"] = user_id
+        elif memory_type == "procedural":
             selector["user_id"] = "*" if user_id is None else {"$in": [user_id, "*"]}
         elif user_id is not None:
             selector["user_id"] = {"$in": [user_id, "*"]}

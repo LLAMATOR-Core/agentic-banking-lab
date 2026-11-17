@@ -18,6 +18,7 @@ def test_secure_and_vulnerable_abs_mcp_identity_contracts(monkeypatch) -> None:
     for tool in vulnerable.tools:
         assert "customer_id" in tool.input_schema["properties"]
         assert "customer_id" in tool.input_schema["required"]
+    assert "get_account_statement" in {tool.name for tool in vulnerable.tools}
 
 
 def test_realm_contains_token_exchange_providers_and_multiple_users() -> None:

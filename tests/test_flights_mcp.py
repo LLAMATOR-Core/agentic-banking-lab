@@ -185,7 +185,7 @@ def test_lab_ingest_stages_mcp_note_without_turning_it_into_trusted_memory(
     monkeypatch.setenv("FLIGHTS_MCP_NOTE_FILE", str(note))
     banking = importlib.import_module("services.banking_agent.app")
     travel = importlib.import_module("services.travel_agent.app")
-    clients = importlib.import_module("services.banking_agent.clients")
+    clients = importlib.import_module("services.common.travel")
     captured = []
 
     async def stage_candidate(**kwargs):
@@ -244,5 +244,9 @@ async def test_provider_failure_is_reported_without_local_fallback(monkeypatch):
             "plan": {"search_flights": True},
         }
     )
-    assert result["flights"] == {"results": [], "mode": "unavailable"}
-    assert result["search_errors"] == ["flights: Flights MCP is unavailable"]
+    assert result["flights"] == {
+        "results": [],
+        "mode": "unavailable",
+        "meta": {"error_type": "ValueError", "error": "Flights MCP is unavailable"},
+    }
+    assert result["search_errors"] == ["flights: ValueError: Flights MCP is unavailable"]
